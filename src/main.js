@@ -64,12 +64,14 @@ function runSSW() {
 
 // ── Render loop (dual viewport) ──────────────────────
 const MOBILE_BP = 700;
+let mobilePanelHidden = false;
 
 function getLayoutValues() {
     const isMobile = window.innerWidth <= MOBILE_BP;
     return {
+        isMobile,
         panelW: isMobile ? 0 : 310,
-        miniSize: isMobile ? 90 : 180,
+        miniSize: isMobile ? 135 : 180,
         miniPad: isMobile ? 10 : 14,
     };
 }
@@ -88,22 +90,30 @@ function animate(timestamp) {
     const w = renderer.domElement.width / renderer.getPixelRatio();
     const h = renderer.domElement.height / renderer.getPixelRatio();
 
-    const { panelW, miniSize, miniPad } = getLayoutValues();
+    const { isMobile, panelW, miniSize, miniPad } = getLayoutValues();
+
+    // On mobile with panel open, crop 3D area above the panel
+    let panelH = 0;
+    if (isMobile && !mobilePanelHidden) {
+        panelH = Math.round(controlPanel.offsetHeight);
+    }
 
     renderer.clear();
     renderer.setScissorTest(true);
 
     // ── Main viewport ──────────────────────────────────
+    // Viewport = full canvas (keeps projection/ball size unchanged)
+    // Scissor = crop the bottom where the panel sits
     const mainW = w - panelW;
     renderer.setViewport(0, 0, mainW, h);
-    renderer.setScissor(0, 0, mainW, h);
+    renderer.setScissor(0, panelH, mainW, h - panelH);
     camera.aspect = mainW / h;
     camera.updateProjectionMatrix();
     renderer.render(scene, camera);
 
     // ── Mini top-down viewport ─────────────────────────
     const mx = miniPad;
-    const my = h - miniSize - miniPad; // WebGL y is bottom-up
+    const my = h - miniSize - miniPad; // WebGL y is bottom-up (top-left corner)
     renderer.setViewport(mx, my, miniSize, miniSize);
     renderer.setScissor(mx, my, miniSize, miniSize);
     renderer.render(scene, topCamera);
@@ -116,9 +126,9 @@ const toggleBtn = document.getElementById('btn-toggle-panel');
 const controlPanel = document.getElementById('control-panel');
 
 toggleBtn.addEventListener('click', () => {
-    const isHidden = controlPanel.classList.toggle('panel-hidden');
-    toggleBtn.classList.toggle('panel-open', !isHidden);
-    toggleBtn.textContent = isHidden ? '▲' : '▼';
+    mobilePanelHidden = controlPanel.classList.toggle('panel-hidden');
+    toggleBtn.classList.toggle('panel-open', !mobilePanelHidden);
+    toggleBtn.textContent = mobilePanelHidden ? '▲' : '▼';
 });
 
 // ── Kick off ─────────────────────────────────────────

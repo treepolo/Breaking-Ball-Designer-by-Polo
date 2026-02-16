@@ -482,8 +482,8 @@ input[type="range"]::-moz-range-thumb {
 
   /* ── Mini Viewport (smaller on mobile) ── */
   #mini-viewport {
-    width: 90px;
-    height: 90px;
+    width: 135px;
+    height: 135px;
     top: 10px;
     left: 10px;
   }
