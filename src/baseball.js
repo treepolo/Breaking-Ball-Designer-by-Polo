@@ -12,9 +12,9 @@ import {
  *   (x, y, z) = (x0, y0, z0) / ||(x0, y0, z0)||  (then scaled by R)
  */
 export function computeSeamPoints() {
-    const k = 0.35;   // base wave coefficient
-    const m = 0.08;   // 5th harmonic – flattens U-bend sides
-    const h = 1.5;    // controls narrow-waist distance
+    const k = 0.28;   // narrowed base wave
+    const m = 0.06;   // 5th harmonic, proportionally scaled
+    const h = 1.8;    // raised Z height → sphere projection squeezes inward
     const pts = new Float32Array(SEAM_POINTS * 3);
     for (let i = 0; i < SEAM_POINTS; i++) {
         const t = (i / SEAM_POINTS) * Math.PI * 2;
@@ -29,63 +29,44 @@ export function computeSeamPoints() {
     return pts;
 }
 
-/* ── Logo helpers ─────────────────────────────────────── */
-
-const loader = new THREE.TextureLoader();
+/* ── Sphere-conforming patch & Canvas text logos ────── */
 
 /**
  * Create a sphere-conforming rectangular patch.
- * @param {number} r       Sphere radius (slightly > R for offset)
- * @param {THREE.Vector3} center  Unit direction vector pointing to patch center
- * @param {number} halfW   Half angular width (radians)
- * @param {number} halfH   Half angular height (radians)
- * @param {number} segsW   Horizontal segments
- * @param {number} segsH   Vertical segments
- * @param {number} cornerR Corner radius in [0..1] relative to half-size
+ * @param {boolean} rotate90  If true, rotate texture 90° so horizontal text appears vertical on ball
  */
-function createSpherePatch(r, center, halfW, halfH, segsW, segsH, cornerR = 0) {
-    // Build a coordinate frame: N = center, U = "right", V = "up"
+function createSpherePatch(r, center, halfW, halfH, segsW, segsH, rotate90 = false) {
     const N = center.clone().normalize();
-    // Pick an arbitrary "up-ish" reference that isn't parallel to N
     const ref = Math.abs(N.y) < 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
-    const U = new THREE.Vector3().crossVectors(N, ref).normalize(); // right
-    const V = new THREE.Vector3().crossVectors(U, N).normalize();   // up
+    const U = new THREE.Vector3().crossVectors(N, ref).normalize();
+    const V = new THREE.Vector3().crossVectors(U, N).normalize();
 
     const positions = [];
     const uvs = [];
     const indices = [];
 
     for (let iy = 0; iy <= segsH; iy++) {
-        const v = iy / segsH; // 0..1
-        const angleV = (v - 0.5) * 2 * halfH; // [-halfH, halfH]
+        const v = iy / segsH;
+        const angleV = (v - 0.5) * 2 * halfH;
         for (let ix = 0; ix <= segsW; ix++) {
-            const u = ix / segsW; // 0..1
-            const angleU = (u - 0.5) * 2 * halfW; // [-halfW, halfW]
+            const u = ix / segsW;
+            const angleU = (u - 0.5) * 2 * halfW;
 
-            // Rounded corner mask — skip vertices outside rounded rect
-            if (cornerR > 0) {
-                const cu = Math.abs(u - 0.5) * 2; // 0..1 from center
-                const cv = Math.abs(v - 0.5) * 2;
-                const cr = cornerR;
-                if (cu > 1 - cr && cv > 1 - cr) {
-                    const dx = (cu - (1 - cr)) / cr;
-                    const dy = (cv - (1 - cr)) / cr;
-                    // Soft alpha handled by texture; geometry stays rectangular
-                }
-            }
-
-            // Spherical interpolation: rotate N by angleU around V, then by angleV around U
             const dir = N.clone();
             dir.applyAxisAngle(V, angleU);
             dir.applyAxisAngle(U, -angleV);
             dir.normalize().multiplyScalar(r);
 
             positions.push(dir.x, dir.y, dir.z);
-            uvs.push(u, 1 - v); // flip V so top of texture = top of patch
+
+            if (rotate90) {
+                uvs.push(v, u); // 90° CW: canvas left→patch top, canvas right→patch bottom
+            } else {
+                uvs.push(u, 1 - v);
+            }
         }
     }
 
-    // Build triangle indices
     for (let iy = 0; iy < segsH; iy++) {
         for (let ix = 0; ix < segsW; ix++) {
             const a = iy * (segsW + 1) + ix;
@@ -103,6 +84,56 @@ function createSpherePatch(r, center, halfW, halfH, segsW, segsH, cornerR = 0) {
     geo.setIndex(indices);
     geo.computeVertexNormals();
     return geo;
+}
+
+/* ── Canvas-drawn text textures (transparent bg) ────── */
+
+function createDarkText() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // "TREE" in green
+    ctx.fillStyle = '#00A651';
+    ctx.font = 'bold 110px Arial, sans-serif';
+    ctx.fillText('TREE', 256, 85);
+
+    // "POLO" in lime green
+    ctx.fillStyle = '#ADFF2F';
+    ctx.font = 'bold 110px Arial, sans-serif';
+    ctx.fillText('POLO', 256, 195);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+
+function createLightText() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 200;
+    const ctx = canvas.getContext('2d');
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // "TREEPOLO" in green
+    ctx.fillStyle = '#00A651';
+    ctx.font = 'bold 64px Arial, sans-serif';
+    ctx.fillText('TREEPOLO', 256, 65);
+
+    // "About Science of Baseball" in black
+    ctx.fillStyle = '#000000';
+    ctx.font = '34px Arial, sans-serif';
+    ctx.fillText('About Science of Baseball', 256, 145);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
 }
 
 /**
@@ -150,29 +181,26 @@ export function createBaseball() {
     seamMesh.name = 'SeamMesh';
     ballOrientationGroup.add(seamMesh);
 
-    // ── Logos (sphere-conforming patches) ──────────────────
-    // Both logos on the front face (+Z direction), separated by seam:
-    //   Dark logo: above the seam centre (+Z, tilted slightly toward +Y)
-    //   Light logo: below the seam centre (+Z, tilted slightly toward -Y)
-    const logoR = R * 1.004; // just above surface
-    const tiltAngle = 0.28;  // ~16° above/below centre
+    // ── Text logos (Canvas, transparent bg, rotated 90°) ──
+    // Both on the front face (+Z), separated by the seam.
+    // UV rotate90 = true maps horizontal canvas text to vertical on the ball.
+    const logoR = R * 1.004;
+    const tiltAngle = 0.30; // ~17° above/below centre
 
-    // Dark logo — square, above seam
+    // Dark text — above seam (tall narrow patch, 3x text)
     const darkCenter = new THREE.Vector3(0, Math.sin(tiltAngle), Math.cos(tiltAngle)).normalize();
-    const darkGeo = createSpherePatch(logoR, darkCenter, 0.22, 0.22, 24, 24);
-    const darkTex = loader.load('./logo-dark.jpg');
-    darkTex.colorSpace = THREE.SRGBColorSpace;
-    const darkMat = new THREE.MeshBasicMaterial({ map: darkTex });
+    const darkGeo = createSpherePatch(logoR, darkCenter, 0.18, 0.52, 24, 24, true);
+    const darkTex = createDarkText();
+    const darkMat = new THREE.MeshBasicMaterial({ map: darkTex, transparent: true, depthWrite: false });
     const darkLogo = new THREE.Mesh(darkGeo, darkMat);
     darkLogo.name = 'LogoDark';
     ballOrientationGroup.add(darkLogo);
 
-    // Light logo — wider rectangle, below seam (flipped to read correctly)
+    // Light text — below seam (tall narrow patch, 2x text)
     const lightCenter = new THREE.Vector3(0, -Math.sin(tiltAngle), Math.cos(tiltAngle)).normalize();
-    const lightGeo = createSpherePatch(logoR, lightCenter, 0.30, 0.18, 24, 24);
-    const lightTex = loader.load('./logo-light.png');
-    lightTex.colorSpace = THREE.SRGBColorSpace;
-    const lightMat = new THREE.MeshBasicMaterial({ map: lightTex });
+    const lightGeo = createSpherePatch(logoR, lightCenter, 0.16, 0.46, 24, 24, true);
+    const lightTex = createLightText();
+    const lightMat = new THREE.MeshBasicMaterial({ map: lightTex, transparent: true, depthWrite: false });
     const lightLogo = new THREE.Mesh(lightGeo, lightMat);
     lightLogo.name = 'LogoLight';
     ballOrientationGroup.add(lightLogo);
