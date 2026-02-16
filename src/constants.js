@@ -1,0 +1,13 @@
+export const R = 1;
+export const SEAM_POINTS = 2000;
+export const SEAM_TUBE_RADIUS = 0.054; // 3x wider than original
+export const AXIS_EXTEND = 0.3;
+export const SSW_ROTATION_STEPS = 720;
+export const SSW_BINS = 360;
+export const SSW_MAX_SLICES = 30;
+export const DASHBOARD_GAP = 0.18;
+export const DASHBOARD_HEAT_WIDTH = 0.20;
+export const DASHBOARD_INFO_WIDTH = 0.08;
+export const BASE_THICKNESS = 0.054; // same as seam tube radius
+export const DEG2RAD = Math.PI / 180;
+export const RAD2DEG = 180 / Math.PI;

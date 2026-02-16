@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SSW潛力觀察器與球路設計器 by小樹Polo</title>
+  <meta name="description" content="3D baseball seam-shifted wake analysis tool" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+
+<body>
+  <canvas id="three-canvas"></canvas>
+
+  <!-- Watermark overlay -->
+  <div id="watermark"></div>
+
+  <!-- Mini top-down viewport frame -->
+  <div id="mini-viewport">
+    <span class="mini-label" data-i18n="topView">俯視圖</span>
+  </div>
+
+  <!-- Color legend -->
+  <div id="color-legend">
+    <div class="legend-title" data-i18n="seamPresence">縫線出現時長</div>
+    <div class="legend-body">
+      <div class="legend-gradient"></div>
+      <div class="legend-labels">
+        <span>100%</span>
+        <span>75%</span>
+        <span>50%</span>
+        <span>25%</span>
+        <span>0%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Control Panel -->
+  <div id="control-panel">
+    <div class="panel-header">
+      <h1 class="panel-title">SSW潛力觀察器與球路設計器<br><span class="brand-accent">by小樹Polo</span></h1>
+      <button id="btn-lang" class="btn-lang" data-i18n="langSwitch">切換成 English</button>
+    </div>
+
+    <!-- View Control -->
+    <section class="control-section">
+      <h2 class="section-title" data-i18n="viewControl">視角控制</h2>
+      <div class="button-row">
+        <button id="btn-pitcher" class="btn-view" data-i18n="pitcherView">投手視角</button>
+        <button id="btn-catcher" class="btn-view" data-i18n="catcherView">捕手視角</button>
+      </div>
+    </section>
+
+    <!-- Ball Orientation -->
+    <section class="control-section">
+      <h2 class="section-title" data-i18n="ballOrientation">球體方向</h2>
+      <div class="slider-group">
+        <label><span data-i18n="orientX">方向 X</span> <span id="val-orient-x" class="slider-value">0°</span></label>
+        <input type="range" id="orient-x" min="-180" max="180" value="0" step="1" />
+      </div>
+      <div class="slider-group">
+        <label><span data-i18n="orientY">方向 Y</span> <span id="val-orient-y" class="slider-value">0°</span></label>
+        <input type="range" id="orient-y" min="-180" max="180" value="0" step="1" />
+      </div>
+      <div class="slider-group">
+        <label><span data-i18n="orientZ">方向 Z</span> <span id="val-orient-z" class="slider-value">0°</span></label>
+        <input type="range" id="orient-z" min="-180" max="180" value="0" step="1" />
+      </div>
+    </section>
+
+    <!-- Spin Axis -->
+    <section class="control-section">
+      <h2 class="section-title" data-i18n="spinAxis">旋轉軸</h2>
+      <div class="slider-group">
+        <label><span data-i18n="spinDirection">旋轉方向</span> <span id="val-spin-dir"
+            class="slider-value">12:00</span></label>
+        <input type="range" id="spin-direction" min="0" max="360" value="180" step="1" />
+      </div>
+      <div class="slider-group">
+        <label><span data-i18n="gyroAngle">陀螺角度</span> <span id="val-gyro" class="slider-value">0°</span></label>
+        <input type="range" id="gyro-angle" min="-90" max="90" value="0" step="1" />
+      </div>
+      <div class="slider-group">
+        <label><span data-i18n="spinRate">轉速</span> <span id="val-rpm" class="slider-value">1800 RPM</span></label>
+        <input type="range" id="spin-rate" min="0" max="3000" value="1800" step="10" />
+      </div>
+    </section>
+
+    <!-- SSW Plane -->
+    <section class="control-section">
+      <h2 class="section-title" data-i18n="sswPlane">SSW 判定平面</h2>
+      <div class="slider-group">
+        <label><span data-i18n="frontBound">前邊界 α</span> <span id="val-alpha-front"
+            class="slider-value">0°</span></label>
+        <input type="range" id="ssw-alpha-front" min="-90" max="90" value="0" step="1" />
+      </div>
+      <div class="slider-group">
+        <label><span data-i18n="backBound">後邊界 α</span> <span id="val-alpha-back" class="slider-value">0°</span></label>
+        <input type="range" id="ssw-alpha-back" min="-90" max="90" value="0" step="1" />
+      </div>
+      <div class="mode-toggle">
+        <label class="mode-label" data-i18n="displayMode">顯示模式</label>
+        <div class="radio-group">
+          <label class="radio-btn"><input type="radio" name="display-mode" value="combined" checked /><span
+              data-i18n="combinedMode">加總顯示</span></label>
+          <label class="radio-btn"><input type="radio" name="display-mode" value="separate" /><span
+              data-i18n="separateMode">分別顯示</span></label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Animation -->
+    <section class="control-section">
+      <h2 class="section-title" data-i18n="animation">動畫</h2>
+      <div class="button-row">
+        <button id="btn-play-pause" class="btn-primary" data-i18n="play">▶ 播放</button>
+      </div>
+      <div class="drag-axis-group">
+        <label class="axis-label" data-i18n="dragAxis">拖曳軸</label>
+        <div class="radio-group">
+          <label class="radio-btn"><input type="radio" name="drag-axis" value="x" checked /><span>X</span></label>
+          <label class="radio-btn"><input type="radio" name="drag-axis" value="y" /><span>Y</span></label>
+          <label class="radio-btn"><input type="radio" name="drag-axis" value="z" /><span>Z</span></label>
+        </div>
+      </div>
+    </section>
+
+    <!-- SSW Results -->
+    <section class="control-section results-section">
+      <h2 class="section-title" data-i18n="sswResults">SSW 結果</h2>
+      <div class="result-row">
+        <span class="result-label" data-i18n="asymmetryIndex">不對稱指數</span>
+        <span id="result-asymmetry" class="result-value">0.00</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label" data-i18n="forceDirection">力的方向</span>
+        <span id="result-clock" class="result-value">—</span>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
