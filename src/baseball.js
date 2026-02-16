@@ -5,21 +5,22 @@ import {
 
 /**
  * Compute seam curve points projected onto a unit sphere.
- * Uses sphere-projected parametric equation:
- *   x0 = cos(t) - k·cos(3t)
- *   y0 = sin(t) + k·sin(3t)
+ * Uses improved sphere-projected parametric equation with 5th harmonic:
+ *   x0 = cos(t) - k·cos(3t) + m·cos(5t)
+ *   y0 = sin(t) + k·sin(3t) + m·sin(5t)
  *   z0 = h·cos(2t)
  *   (x, y, z) = (x0, y0, z0) / ||(x0, y0, z0)||  (then scaled by R)
  * Returns Float32Array of [x, y, z, ...] with SEAM_POINTS entries.
  */
 export function computeSeamPoints() {
-    const k = 0.4;    // controls tightness of the U-bends
-    const h = 1.65;   // controls narrow-waist distance
+    const k = 0.35;   // base wave coefficient
+    const m = 0.08;   // 5th harmonic coefficient – flattens U-bend sides
+    const h = 1.5;    // controls narrow-waist distance
     const pts = new Float32Array(SEAM_POINTS * 3);
     for (let i = 0; i < SEAM_POINTS; i++) {
         const t = (i / SEAM_POINTS) * Math.PI * 2;
-        const x0 = Math.cos(t) - k * Math.cos(3 * t);
-        const y0 = Math.sin(t) + k * Math.sin(3 * t);
+        const x0 = Math.cos(t) - k * Math.cos(3 * t) + m * Math.cos(5 * t);
+        const y0 = Math.sin(t) + k * Math.sin(3 * t) + m * Math.sin(5 * t);
         const z0 = h * Math.cos(2 * t);
         const d = Math.sqrt(x0 * x0 + y0 * y0 + z0 * z0);
         pts[i * 3] = (x0 / d) * R;
@@ -53,22 +54,33 @@ export function createBaseball() {
     ballMesh.name = 'BallMesh';
     ballOrientationGroup.add(ballMesh);
 
-    // ── Seam ───────────────────────────────────────────────
+    // ── Seam (semi-embedded stitch) ────────────────────────
+    // Sink the tube center inward by half the tube radius so that
+    // the bottom half sits inside the ball and only the top half protrudes.
     const seamPts = computeSeamPoints();
+    const sinkFactor = SEAM_TUBE_RADIUS * 0.5; // how deep to embed
     const seamVectors = [];
     for (let i = 0; i < SEAM_POINTS; i++) {
-        seamVectors.push(
-            new THREE.Vector3(seamPts[i * 3], seamPts[i * 3 + 1], seamPts[i * 3 + 2])
-        );
+        const x = seamPts[i * 3];
+        const y = seamPts[i * 3 + 1];
+        const z = seamPts[i * 3 + 2];
+        // Normal at surface point = normalized position (sphere)
+        const len = Math.sqrt(x * x + y * y + z * z);
+        // Move center inward along surface normal
+        seamVectors.push(new THREE.Vector3(
+            x - (x / len) * sinkFactor,
+            y - (y / len) * sinkFactor,
+            z - (z / len) * sinkFactor
+        ));
     }
     const seamCurve = new THREE.CatmullRomCurve3(seamVectors, true);
     const seamGeo = new THREE.TubeGeometry(seamCurve, SEAM_POINTS, SEAM_TUBE_RADIUS, 8, true);
     const seamMat = new THREE.MeshStandardMaterial({
         color: 0xcc2200,
-        roughness: 0.4,
-        metalness: 0.1,
-        emissive: 0x440000,
-        emissiveIntensity: 0.3,
+        roughness: 0.6,
+        metalness: 0.05,
+        emissive: 0x330000,
+        emissiveIntensity: 0.15,
     });
     const seamMesh = new THREE.Mesh(seamGeo, seamMat);
     seamMesh.name = 'SeamMesh';
