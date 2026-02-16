@@ -63,9 +63,16 @@ function runSSW() {
 }
 
 // ── Render loop (dual viewport) ──────────────────────
-const PANEL_W = 310;
-const MINI_SIZE = 180;
-const MINI_PAD = 14;
+const MOBILE_BP = 700;
+
+function getLayoutValues() {
+    const isMobile = window.innerWidth <= MOBILE_BP;
+    return {
+        panelW: isMobile ? 0 : 310,
+        miniSize: isMobile ? 90 : 180,
+        miniPad: isMobile ? 10 : 14,
+    };
+}
 
 function animate(timestamp) {
     requestAnimationFrame(animate);
@@ -80,13 +87,14 @@ function animate(timestamp) {
 
     const w = renderer.domElement.width / renderer.getPixelRatio();
     const h = renderer.domElement.height / renderer.getPixelRatio();
-    const pr = renderer.getPixelRatio();
+
+    const { panelW, miniSize, miniPad } = getLayoutValues();
 
     renderer.clear();
     renderer.setScissorTest(true);
 
     // ── Main viewport ──────────────────────────────────
-    const mainW = w - PANEL_W;
+    const mainW = w - panelW;
     renderer.setViewport(0, 0, mainW, h);
     renderer.setScissor(0, 0, mainW, h);
     camera.aspect = mainW / h;
@@ -94,14 +102,24 @@ function animate(timestamp) {
     renderer.render(scene, camera);
 
     // ── Mini top-down viewport ─────────────────────────
-    const mx = MINI_PAD;
-    const my = h - MINI_SIZE - MINI_PAD; // WebGL y is bottom-up
-    renderer.setViewport(mx, my, MINI_SIZE, MINI_SIZE);
-    renderer.setScissor(mx, my, MINI_SIZE, MINI_SIZE);
+    const mx = miniPad;
+    const my = h - miniSize - miniPad; // WebGL y is bottom-up
+    renderer.setViewport(mx, my, miniSize, miniSize);
+    renderer.setScissor(mx, my, miniSize, miniSize);
     renderer.render(scene, topCamera);
 
     renderer.setScissorTest(false);
 }
+
+// ── Mobile panel toggle ─────────────────────────────
+const toggleBtn = document.getElementById('btn-toggle-panel');
+const controlPanel = document.getElementById('control-panel');
+
+toggleBtn.addEventListener('click', () => {
+    const isHidden = controlPanel.classList.toggle('panel-hidden');
+    toggleBtn.classList.toggle('panel-open', !isHidden);
+    toggleBtn.textContent = isHidden ? '▲' : '▼';
+});
 
 // ── Kick off ─────────────────────────────────────────
 applyControls();
