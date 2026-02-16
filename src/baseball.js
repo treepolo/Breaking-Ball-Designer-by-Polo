@@ -10,12 +10,11 @@ import {
  *   y0 = sin(t) + k·sin(3t) + m·sin(5t)
  *   z0 = h·cos(2t)
  *   (x, y, z) = (x0, y0, z0) / ||(x0, y0, z0)||  (then scaled by R)
- * Returns Float32Array of [x, y, z, ...] with SEAM_POINTS entries.
  */
 export function computeSeamPoints() {
-    const k = 0.35;   // base wave coefficient
-    const m = 0.08;   // 5th harmonic coefficient – flattens U-bend sides
-    const h = 1.5;    // controls narrow-waist distance
+    const k = 0.28;   // narrowed to shrink overall width
+    const m = 0.06;   // 5th harmonic, scaled proportionally
+    const h = 1.8;    // raised Z height → sphere projection squeezes inward
     const pts = new Float32Array(SEAM_POINTS * 3);
     for (let i = 0; i < SEAM_POINTS; i++) {
         const t = (i / SEAM_POINTS) * Math.PI * 2;
@@ -28,6 +27,75 @@ export function computeSeamPoints() {
         pts[i * 3 + 2] = (z0 / d) * R;
     }
     return pts;
+}
+
+/* ── Logo texture generation (Canvas API) ─────────── */
+
+function createDarkLogoTexture() {
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // Circular clip
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Black background
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, size, size);
+
+    // "TREE" in green
+    ctx.fillStyle = '#00A651';
+    ctx.font = 'bold 140px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('TREE', size / 2, size / 2 - 72);
+
+    // "POLO" in lime green
+    ctx.fillStyle = '#ADFF2F';
+    ctx.font = 'bold 140px Arial, sans-serif';
+    ctx.fillText('POLO', size / 2, size / 2 + 72);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+
+function createLightLogoTexture() {
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // Circular clip
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Off-white background (matches ball color)
+    ctx.fillStyle = '#f5f5f0';
+    ctx.fillRect(0, 0, size, size);
+
+    // "TREEPOLO" in green
+    ctx.fillStyle = '#00A651';
+    ctx.font = 'bold 88px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('TREEPOLO', size / 2, size / 2 - 36);
+
+    // "About Science of Baseball" in black
+    ctx.fillStyle = '#000000';
+    ctx.font = '500 34px Arial, sans-serif';
+    ctx.fillText('About Science of', size / 2, size / 2 + 28);
+    ctx.fillText('Baseball', size / 2, size / 2 + 66);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
 }
 
 /**
@@ -55,18 +123,14 @@ export function createBaseball() {
     ballOrientationGroup.add(ballMesh);
 
     // ── Seam (semi-embedded stitch) ────────────────────────
-    // Sink the tube center inward by half the tube radius so that
-    // the bottom half sits inside the ball and only the top half protrudes.
     const seamPts = computeSeamPoints();
-    const sinkFactor = SEAM_TUBE_RADIUS * 0.5; // how deep to embed
+    const sinkFactor = SEAM_TUBE_RADIUS * 0.5;
     const seamVectors = [];
     for (let i = 0; i < SEAM_POINTS; i++) {
         const x = seamPts[i * 3];
         const y = seamPts[i * 3 + 1];
         const z = seamPts[i * 3 + 2];
-        // Normal at surface point = normalized position (sphere)
         const len = Math.sqrt(x * x + y * y + z * z);
-        // Move center inward along surface normal
         seamVectors.push(new THREE.Vector3(
             x - (x / len) * sinkFactor,
             y - (y / len) * sinkFactor,
@@ -85,6 +149,31 @@ export function createBaseball() {
     const seamMesh = new THREE.Mesh(seamGeo, seamMat);
     seamMesh.name = 'SeamMesh';
     ballOrientationGroup.add(seamMesh);
+
+    // ── Logos at poles ─────────────────────────────────────
+    const logoRadius = 0.24;
+    const logoGeo = new THREE.CircleGeometry(logoRadius, 64);
+    const logoOffset = R * 1.003; // just above surface to avoid z-fighting
+
+    // Dark logo → +Z pole (green circle area)
+    const darkTex = createDarkLogoTexture();
+    const darkMat = new THREE.MeshBasicMaterial({ map: darkTex });
+    const darkLogo = new THREE.Mesh(logoGeo, darkMat);
+    darkLogo.position.set(0, 0, logoOffset);
+    darkLogo.name = 'LogoDark';
+    ballOrientationGroup.add(darkLogo);
+
+    // Light logo → -Z pole (yellow circle area)
+    const lightTex = createLightLogoTexture();
+    // Mirror texture U to compensate for Y-axis rotation
+    lightTex.wrapS = THREE.RepeatWrapping;
+    lightTex.repeat.x = -1;
+    const lightMat = new THREE.MeshBasicMaterial({ map: lightTex });
+    const lightLogo = new THREE.Mesh(logoGeo.clone(), lightMat);
+    lightLogo.position.set(0, 0, -logoOffset);
+    lightLogo.rotation.y = Math.PI; // face -Z direction
+    lightLogo.name = 'LogoLight';
+    ballOrientationGroup.add(lightLogo);
 
     // ── Spin axis line ─────────────────────────────────────
     const axisLen = R + AXIS_EXTEND * R; // 1.3R
