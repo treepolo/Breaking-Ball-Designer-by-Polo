@@ -29,74 +29,9 @@ export function computeSeamPoints() {
     return pts;
 }
 
-/* ── Logo texture generation (Canvas API) ─────────── */
+/* ── Logo textures (loaded from real image files) ──── */
 
-function createDarkLogoTexture() {
-    const size = 512;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-
-    // Circular clip
-    ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-    ctx.clip();
-
-    // Black background
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, size, size);
-
-    // "TREE" in green
-    ctx.fillStyle = '#00A651';
-    ctx.font = 'bold 140px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('TREE', size / 2, size / 2 - 72);
-
-    // "POLO" in lime green
-    ctx.fillStyle = '#ADFF2F';
-    ctx.font = 'bold 140px Arial, sans-serif';
-    ctx.fillText('POLO', size / 2, size / 2 + 72);
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-}
-
-function createLightLogoTexture() {
-    const size = 512;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-
-    // Circular clip
-    ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-    ctx.clip();
-
-    // Off-white background (matches ball color)
-    ctx.fillStyle = '#f5f5f0';
-    ctx.fillRect(0, 0, size, size);
-
-    // "TREEPOLO" in green
-    ctx.fillStyle = '#00A651';
-    ctx.font = 'bold 88px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('TREEPOLO', size / 2, size / 2 - 36);
-
-    // "About Science of Baseball" in black
-    ctx.fillStyle = '#000000';
-    ctx.font = '500 34px Arial, sans-serif';
-    ctx.fillText('About Science of', size / 2, size / 2 + 28);
-    ctx.fillText('Baseball', size / 2, size / 2 + 66);
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-}
+const loader = new THREE.TextureLoader();
 
 /**
  * Create the baseball nested group hierarchy and return references.
@@ -150,13 +85,14 @@ export function createBaseball() {
     seamMesh.name = 'SeamMesh';
     ballOrientationGroup.add(seamMesh);
 
-    // ── Logos at poles ─────────────────────────────────────
+    // ── Logos at poles (using actual image files) ──────────
     const logoRadius = 0.24;
     const logoGeo = new THREE.CircleGeometry(logoRadius, 64);
-    const logoOffset = R * 1.003; // just above surface to avoid z-fighting
+    const logoOffset = R * 1.003;
 
     // Dark logo → +Z pole (green circle area)
-    const darkTex = createDarkLogoTexture();
+    const darkTex = loader.load('./logo-dark.jpg');
+    darkTex.colorSpace = THREE.SRGBColorSpace;
     const darkMat = new THREE.MeshBasicMaterial({ map: darkTex });
     const darkLogo = new THREE.Mesh(logoGeo, darkMat);
     darkLogo.position.set(0, 0, logoOffset);
@@ -164,14 +100,15 @@ export function createBaseball() {
     ballOrientationGroup.add(darkLogo);
 
     // Light logo → -Z pole (yellow circle area)
-    const lightTex = createLightLogoTexture();
+    const lightTex = loader.load('./logo-light.png');
+    lightTex.colorSpace = THREE.SRGBColorSpace;
     // Mirror texture U to compensate for Y-axis rotation
     lightTex.wrapS = THREE.RepeatWrapping;
     lightTex.repeat.x = -1;
     const lightMat = new THREE.MeshBasicMaterial({ map: lightTex });
     const lightLogo = new THREE.Mesh(logoGeo.clone(), lightMat);
     lightLogo.position.set(0, 0, -logoOffset);
-    lightLogo.rotation.y = Math.PI; // face -Z direction
+    lightLogo.rotation.y = Math.PI;
     lightLogo.name = 'LogoLight';
     ballOrientationGroup.add(lightLogo);
 
