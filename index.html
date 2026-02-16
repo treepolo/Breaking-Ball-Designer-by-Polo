@@ -18,6 +18,11 @@
   <!-- Watermark overlay -->
   <div id="watermark"></div>
 
+  <!-- SSW 3D Overlay Labels -->
+  <div id="label-hemisphere-a" class="ssw-label"></div>
+  <div id="label-hemisphere-b" class="ssw-label"></div>
+  <div id="label-top" class="ssw-label"></div>
+
   <!-- Mini top-down viewport frame -->
   <div id="mini-viewport">
     <span class="mini-label" data-i18n="topView">俯視圖</span>
@@ -73,15 +78,18 @@
     <section class="control-section">
       <h2 class="section-title" data-i18n="ballOrientation">球體方向</h2>
       <div class="slider-group">
-        <label><span data-i18n="orientX">方向 X</span> <span id="val-orient-x" class="slider-value">0°</span></label>
+        <label><span data-i18n="orientX">方向 X</span> <input type="number" id="val-orient-x" class="slider-input"
+            value="0" min="-180" max="180"></label>
         <input type="range" id="orient-x" min="-180" max="180" value="0" step="1" />
       </div>
       <div class="slider-group">
-        <label><span data-i18n="orientY">方向 Y</span> <span id="val-orient-y" class="slider-value">0°</span></label>
+        <label><span data-i18n="orientY">方向 Y</span> <input type="number" id="val-orient-y" class="slider-input"
+            value="0" min="-180" max="180"></label>
         <input type="range" id="orient-y" min="-180" max="180" value="0" step="1" />
       </div>
       <div class="slider-group">
-        <label><span data-i18n="orientZ">方向 Z</span> <span id="val-orient-z" class="slider-value">0°</span></label>
+        <label><span data-i18n="orientZ">方向 Z</span> <input type="number" id="val-orient-z" class="slider-input"
+            value="0" min="-180" max="180"></label>
         <input type="range" id="orient-z" min="-180" max="180" value="0" step="1" />
       </div>
     </section>
@@ -90,16 +98,18 @@
     <section class="control-section">
       <h2 class="section-title" data-i18n="spinAxis">旋轉軸</h2>
       <div class="slider-group">
-        <label><span data-i18n="spinDirection">旋轉方向</span> <span id="val-spin-dir"
-            class="slider-value">12:00</span></label>
+        <label><span data-i18n="spinDirection">旋轉方向</span> <input type="text" id="val-spin-dir" class="slider-input"
+            value="12:00" readonly></label>
         <input type="range" id="spin-direction" min="0" max="360" value="180" step="1" />
       </div>
       <div class="slider-group">
-        <label><span data-i18n="gyroAngle">陀螺角度</span> <span id="val-gyro" class="slider-value">0°</span></label>
+        <label><span data-i18n="gyroAngle">陀螺角度</span> <input type="number" id="val-gyro" class="slider-input" value="0"
+            min="-90" max="90"></label>
         <input type="range" id="gyro-angle" min="-90" max="90" value="0" step="1" />
       </div>
       <div class="slider-group">
-        <label><span data-i18n="spinRate">轉速</span> <span id="val-rpm" class="slider-value">1800 RPM</span></label>
+        <label><span data-i18n="spinRate">轉速</span> <input type="number" id="val-rpm" class="slider-input" value="1800"
+            min="0" max="3000"></label>
         <input type="range" id="spin-rate" min="0" max="3000" value="1800" step="10" />
       </div>
     </section>
@@ -108,29 +118,29 @@
     <section class="control-section">
       <h2 class="section-title" data-i18n="sswPlane">SSW 判定平面</h2>
       <div class="slider-group">
-        <label><span data-i18n="directSepStart">直接分離起點</span> <span id="val-alpha-front"
-            class="slider-value">0°</span></label>
-        <input type="range" id="ssw-alpha-front" min="-90" max="90" value="0" step="1" />
+        <label><span data-i18n="directSepStart">直接分離起點</span> <input type="number" id="val-alpha-front"
+            class="slider-input" value="-11" step="0.1"></label>
+        <input type="range" id="ssw-alpha-front" min="-90" max="90" value="-11" step="0.1" />
       </div>
       <div class="slider-group">
-        <label><span data-i18n="inducedSepZone">誘發分離區</span> <span id="val-induced-zone"
-            class="slider-value">0°</span></label>
-        <input type="range" id="ssw-induced-zone" min="-90" max="90" value="0" step="1" />
+        <label><span data-i18n="inducedSepZone">誘發分離區</span> <input type="number" id="val-induced-zone"
+            class="slider-input" value="-0.6" step="0.1"></label>
+        <input type="range" id="ssw-induced-zone" min="-90" max="90" value="-0.6" step="0.1" />
       </div>
       <div class="slider-group">
-        <label><span data-i18n="inducedSepStart">誘發分離起點</span> <span id="val-induced-start"
-            class="slider-value">0°</span></label>
-        <input type="range" id="ssw-induced-start" min="-90" max="90" value="0" step="1" />
+        <label><span data-i18n="inducedSepStart">誘發分離起點</span> <input type="number" id="val-induced-start"
+            class="slider-input" value="10" step="0.1"></label>
+        <input type="range" id="ssw-induced-start" min="-90" max="90" value="10" step="0.1" />
       </div>
       <div class="slider-group">
-        <label><span data-i18n="naturalSepZone">自然分離區</span> <span id="val-natural-zone"
-            class="slider-value">0°</span></label>
-        <input type="range" id="ssw-natural-zone" min="-90" max="90" value="0" step="1" />
+        <label><span data-i18n="naturalSepZone">自然分離區</span> <input type="number" id="val-natural-zone"
+            class="slider-input" value="25.1" step="0.1"></label>
+        <input type="range" id="ssw-natural-zone" min="-90" max="90" value="25.1" step="0.1" />
       </div>
       <div class="slider-group">
-        <label><span data-i18n="inducedSepEnd">誘發分離終點</span> <span id="val-alpha-back"
-            class="slider-value">0°</span></label>
-        <input type="range" id="ssw-alpha-back" min="-90" max="90" value="0" step="1" />
+        <label><span data-i18n="inducedSepEnd">誘發分離終點</span> <input type="number" id="val-alpha-back"
+            class="slider-input" value="30" step="0.1"></label>
+        <input type="range" id="ssw-alpha-back" min="-90" max="90" value="30" step="0.1" />
       </div>
       <div class="mode-toggle">
         <label class="mode-label" data-i18n="displayMode">顯示模式</label>

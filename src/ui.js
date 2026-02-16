@@ -35,9 +35,9 @@ export class UIControls {
         return checked ? checked.value : 'x';
     }
 
-    setOrientX(deg) { this._el('orient-x').value = deg; this._el('val-orient-x').textContent = `${Math.round(deg)}°`; }
-    setOrientY(deg) { this._el('orient-y').value = deg; this._el('val-orient-y').textContent = `${Math.round(deg)}°`; }
-    setOrientZ(deg) { this._el('orient-z').value = deg; this._el('val-orient-z').textContent = `${Math.round(deg)}°`; }
+    setOrientX(deg) { this._el('orient-x').value = deg; this._el('val-orient-x').value = Math.round(deg); }
+    setOrientY(deg) { this._el('orient-y').value = deg; this._el('val-orient-y').value = Math.round(deg); }
+    setOrientZ(deg) { this._el('orient-z').value = deg; this._el('val-orient-z').value = Math.round(deg); }
     setAsymmetry(val) { this._el('result-asymmetry').textContent = val.toFixed(2); }
     setSSWEffectIndex(val) { this._el('result-ssw-effect').textContent = val.toFixed(2); }
     setClockDirection(str) { this._el('result-clock').textContent = str; }
@@ -50,44 +50,80 @@ export class UIControls {
         // Same convention as original: front has the smaller value, back has the larger value.
 
         const sliders = [
-            { id: 'orient-x', label: 'val-orient-x', fmt: v => `${v}°`, key: 'orientX' },
-            { id: 'orient-y', label: 'val-orient-y', fmt: v => `${v}°`, key: 'orientY' },
-            { id: 'orient-z', label: 'val-orient-z', fmt: v => `${v}°`, key: 'orientZ' },
-            { id: 'spin-direction', label: 'val-spin-dir', fmt: v => angleToClockString(parseFloat(v) * DEG2RAD), key: 'spinDirection' },
-            { id: 'gyro-angle', label: 'val-gyro', fmt: v => `${v}°`, key: 'gyroAngle' },
-            { id: 'spin-rate', label: 'val-rpm', fmt: v => `${v} ${t('rpm')}`, key: 'spinRate' },
-            { id: 'ssw-alpha-front', label: 'val-alpha-front', fmt: v => `${v}°`, key: 'alphaFront' },
-            { id: 'ssw-induced-zone', label: 'val-induced-zone', fmt: v => `${v}°`, key: 'inducedZone' },
-            { id: 'ssw-induced-start', label: 'val-induced-start', fmt: v => `${v}°`, key: 'inducedStart' },
-            { id: 'ssw-natural-zone', label: 'val-natural-zone', fmt: v => `${v}°`, key: 'naturalZone' },
-            { id: 'ssw-alpha-back', label: 'val-alpha-back', fmt: v => `${v}°`, key: 'alphaBack' },
+            { id: 'orient-x', label: 'val-orient-x', key: 'orientX' },
+            { id: 'orient-y', label: 'val-orient-y', key: 'orientY' },
+            { id: 'orient-z', label: 'val-orient-z', key: 'orientZ' },
+            { id: 'spin-direction', label: 'val-spin-dir', key: 'spinDirection', isClock: true },
+            { id: 'gyro-angle', label: 'val-gyro', key: 'gyroAngle' },
+            { id: 'spin-rate', label: 'val-rpm', key: 'spinRate' },
+            { id: 'ssw-alpha-front', label: 'val-alpha-front', key: 'alphaFront' },
+            { id: 'ssw-induced-zone', label: 'val-induced-zone', key: 'inducedZone' },
+            { id: 'ssw-induced-start', label: 'val-induced-start', key: 'inducedStart' },
+            { id: 'ssw-natural-zone', label: 'val-natural-zone', key: 'naturalZone' },
+            { id: 'ssw-alpha-back', label: 'val-alpha-back', key: 'alphaBack' },
         ];
 
         // Helper: get ordered plane slider elements
         const planeIds = ['ssw-alpha-front', 'ssw-induced-zone', 'ssw-induced-start', 'ssw-natural-zone', 'ssw-alpha-back'];
 
         for (const s of sliders) {
-            const el = this._el(s.id);
-            const lbl = this._el(s.label);
-            el.addEventListener('input', () => {
-                // Enforce ordering for the 5 SSW planes
+            const rangeEl = this._el(s.id);
+            const inputEl = this._el(s.label);
+
+            // Handler for update
+            const update = (sourceEl) => {
+                let val = parseFloat(sourceEl.value);
+
+                // Enforce ordering for SSW planes
                 const planeIdx = planeIds.indexOf(s.id);
                 if (planeIdx >= 0) {
-                    const val = parseFloat(el.value);
-                    // Clamp: cannot go below the plane in front (lower index = smaller value)
+                    // Check bounds against neighbors
                     if (planeIdx > 0) {
                         const frontVal = parseFloat(this._el(planeIds[planeIdx - 1]).value);
-                        if (val < frontVal) el.value = frontVal;
+                        if (val < frontVal) val = frontVal;
                     }
-                    // Clamp: cannot exceed the plane behind (higher index = larger value)
                     if (planeIdx < planeIds.length - 1) {
                         const backVal = parseFloat(this._el(planeIds[planeIdx + 1]).value);
-                        if (val > backVal) el.value = backVal;
+                        if (val > backVal) val = backVal;
                     }
                 }
-                lbl.textContent = s.fmt(el.value);
-                this.onChange({ key: s.key, value: parseFloat(el.value) });
-            });
+
+                // Sync the other element
+                // Special handling for Clock if needed (currently readonly text, so skipping sync TO it if strict)
+                // BUT we want to allow input? If separate input is readonly, we just update it.
+                // Assuming numeric inputs for all EXCEPT spin-direction which is text.
+                // If s.isClock, inputEl is text. rangeEl is number.
+
+                if (s.isClock) {
+                    // Range -> Text (Clock)
+                    // If source is range, update text.
+                    if (sourceEl === rangeEl) {
+                        inputEl.value = angleToClockString(val * DEG2RAD);
+                    }
+                    // If source is input (if we allowed editing), parse clock... 
+                    // For now, assume spin-direction is readonly text as per previous step, so only One-Way sync for display.
+                } else {
+                    // Number <-> Number
+                    if (sourceEl === rangeEl) {
+                        inputEl.value = val;
+                    } else {
+                        rangeEl.value = val;
+                    }
+                }
+
+                // If we corrected 'val' due to constraints, update source too if needed
+                if (sourceEl.value != val && !s.isClock) {
+                    sourceEl.value = val;
+                }
+
+                this.onChange({ key: s.key, value: parseFloat(rangeEl.value) });
+            };
+
+            rangeEl.addEventListener('input', () => update(rangeEl));
+            if (!s.isClock) {
+                inputEl.addEventListener('change', () => update(inputEl));
+                inputEl.addEventListener('input', () => update(inputEl)); // Real-time sync
+            }
         }
     }
 
@@ -118,7 +154,7 @@ export class UIControls {
             const newLang = toggleLang();
             this._el('btn-lang').textContent = t('langSwitch');
             // Re-format dynamic labels
-            this._el('val-spin-dir').textContent = angleToClockString(this.spinDirection);
+            this._el('val-spin-dir').value = angleToClockString(this.spinDirection);
             const btn = this._el('btn-play-pause');
             btn.textContent = this.isPlaying ? t('pause') : t('play');
         });

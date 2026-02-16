@@ -1,4 +1,5 @@
 import './style.css';
+import * as THREE from 'three';
 import { createScene, setPitcherView, setCatcherView } from './scene.js';
 import { createBaseball, updateSpinAxis, updateBallOrientation } from './baseball.js';
 import { computeSSW, angleToClockString } from './ssw.js';
@@ -45,6 +46,41 @@ const contrib75El = document.getElementById('contrib-75');
 const contrib50El = document.getElementById('contrib-50');
 const contrib25El = document.getElementById('contrib-25');
 
+// ── SSW Labels ──────────────────────────────────────
+const labelA = document.getElementById('label-hemisphere-a');
+const labelB = document.getElementById('label-hemisphere-b');
+const labelTop = document.getElementById('label-top');
+
+const posA = new THREE.Vector3();
+const posB = new THREE.Vector3();
+const posTop = new THREE.Vector3(0, R * 1.55, 0); // Global top (slightly higher)
+
+function updateSSWLabels(valA, valB, valTotal, arrowAngle) {
+    labelA.textContent = valA ? valA.toFixed(2) : "0.00";
+    labelB.textContent = valB ? valB.toFixed(2) : "0.00";
+    labelTop.textContent = valTotal ? valTotal.toFixed(2) : "0.00";
+
+    // Calculate positions based on judgment line
+    // judgmentAngle splits the circle. Half A is "Right" relative to judgment vector?
+    // In computeSSW: judgmentAngle = spinDirection + PI/2.
+    // side >= 0 (A) is the half where sin(ang - judgment) >= 0.
+    // Max value of sin occurs at ang - judgment = PI/2 => ang = judgment + PI/2.
+    // So Center of A is at judgment + PI/2.
+
+    // UI spinDirection includes +PI relative to raw slider?
+    // computeSSW uses passed spinDirection. ui.spinDirection is the source.
+
+    let judgmentAngle = ui.spinDirection + Math.PI / 2;
+    // Ensure posA and posB are "outside" the ball magnitude R
+    const rLabel = R * 1.35;
+
+    const angA = judgmentAngle + Math.PI / 2;
+    const angB = judgmentAngle - Math.PI / 2;
+
+    posA.set(rLabel * Math.cos(angA), rLabel * Math.sin(angA), 0);
+    posB.set(rLabel * Math.cos(angB), rLabel * Math.sin(angB), 0);
+}
+
 function updateContribLegend(maxVal) {
     contribMaxEl.textContent = maxVal.toFixed(2);
     contrib75El.textContent = (maxVal * 0.75).toFixed(2);
@@ -86,8 +122,9 @@ function runSSW() {
     );
     ui.setAsymmetry(result.asymmetryIndex);
     ui.setSSWEffectIndex(result.sswEffectIndex);
-    ui.setClockDirection(result.asymmetryIndex > 0.005 ? angleToClockString(result.arrowAngle) : '—');
+    ui.setClockDirection(result.sswEffectIndex > 0.005 ? angleToClockString(result.arrowAngle) : '—');
     updateContribLegend(result.maxContribution);
+    updateSSWLabels(result.effectSumA, result.effectSumB, result.sswEffectIndex, result.arrowAngle);
 }
 
 // ── Render loop (dual viewport) ──────────────────────
@@ -144,8 +181,30 @@ function animate(timestamp) {
     renderer.setViewport(mx, my, miniSize, miniSize);
     renderer.setScissor(mx, my, miniSize, miniSize);
     renderer.render(scene, topCamera);
-
     renderer.setScissorTest(false);
+
+    // ── Update Labels ──────────────────────────────────
+    updateLabelPosition(labelA, posA, mainW, visH, panelH);
+    updateLabelPosition(labelB, posB, mainW, visH, panelH);
+    updateLabelPosition(labelTop, posTop, mainW, visH, panelH);
+}
+
+function updateLabelPosition(el, pos, mainW, visH, panelH) {
+    if (!el) return;
+    const v = pos.clone().project(camera); // NDC
+    // Check if behind camera
+    if (Math.abs(v.z) > 1) {
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = 'block';
+
+    const x = (v.x + 1) / 2 * mainW;
+    const y_gl = (v.y + 1) / 2 * visH + panelH;
+    const y = window.innerHeight - y_gl;
+
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
 }
 
 // ── Mobile panel toggle ─────────────────────────────

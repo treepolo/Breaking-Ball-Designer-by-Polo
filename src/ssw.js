@@ -177,8 +177,8 @@ export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gy
     const maxContribution = Math.abs(zDirectSepStart - zNaturalZone);
 
     // ── Asymmetry per user spec ────────────────────────
+    // 1. "Asymmetry Index" (for UI display of Seam Asymmetry) based on Presence
     const targetHist = combinedHist;
-
     let sumA = 0, sumB = 0;
     for (let i = 0; i < SSW_BINS; i++) {
         const binAngle = (i / SSW_BINS) * TWO_PI;
@@ -186,17 +186,28 @@ export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gy
         if (side >= 0) sumA += targetHist[i];
         else sumB += targetHist[i];
     }
-
     const asymmetryIndex = Math.abs(sumA - sumB);
 
+    // 2. "SSW Force Direction" (Clock) based on SSW Contribution
+    // Logic: From Higher SSW Index (Contribution) TO Lower SSW Index
+    const effectHist = combinedContrib;
     let wx = 0, wy = 0;
     for (let i = 0; i < SSW_BINS; i++) {
         const binAngle = (i / SSW_BINS) * TWO_PI;
+        // Symmetric counterpart across judgment line
         const j = ((2 * L_bin - i) % SSW_BINS + SSW_BINS) % SSW_BINS;
-        const diff = targetHist[i] - targetHist[j];
+
+        // Difference in SSW Contribution
+        const diff = effectHist[i] - effectHist[j];
+
+        // Accumulate vectors pointing towards the stronger side
         wx += diff * Math.cos(binAngle);
         wy += diff * Math.sin(binAngle);
     }
+
+    // We want arrow from High -> Low.
+    // (wx, wy) points to High (Weighted Center of Contribution).
+    // So point Opposite: (-wx, -wy).
     let arrowAngle = Math.atan2(-wy, -wx);
     if (arrowAngle < 0) arrowAngle += TWO_PI;
     const arrowWidth = Math.PI / 4;
@@ -207,6 +218,7 @@ export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gy
         asymmetryIndex, arrowAngle, arrowWidth,
         numSlices, zPlanes,
         sswEffectIndex, maxContribution,
+        effectSumA, effectSumB, // Return hemisphere sums
     };
 }
 
