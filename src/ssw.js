@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { R, SEAM_POINTS, SSW_ROTATION_STEPS, SSW_BINS, SSW_MAX_SLICES, DEG2RAD, SEAM_TUBE_RADIUS } from './constants.js';
+import { R, SEAM_POINTS, SSW_ROTATION_STEPS, SSW_BINS, SSW_SLICE_COUNT, DEG2RAD, SEAM_TUBE_RADIUS } from './constants.js';
 
 /**
  * SSW computation.
@@ -11,17 +11,32 @@ import { R, SEAM_POINTS, SSW_ROTATION_STEPS, SSW_BINS, SSW_MAX_SLICES, DEG2RAD, 
  *   2. Split histogram into two halves by this line.
  *   3. Asymmetry index = |sumA - sumB| (raw difference of total presence sums).
  *   4. Force direction: FROM the side with MORE seam presence TO the side with LESS.
+ *
+ * SSW Effect Index:
+ *   Each seam point in the SSW judgment zone contributes based on its z-position
+ *   relative to the 5 planes. The effect index is the difference between the two
+ *   half-sphere SSW indices split by the judgment line.
+ *
+ * 5 planes (front→back): 直接分離起點 ≤ 誘發分離區 ≤ 誘發分離起點 ≤ 自然分離區 ≤ 誘發分離終點
  */
-export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gyroAngle, alphaFrontDeg, alphaBackDeg) {
-    const aF = Math.min(alphaFrontDeg, alphaBackDeg);
-    const aB = Math.max(alphaFrontDeg, alphaBackDeg);
-    const span = Math.abs(aB - aF);
-    const numSlices = Math.max(1, Math.min(SSW_MAX_SLICES, Math.round(span)));
+export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gyroAngle,
+    alphaFrontDeg, inducedZoneDeg, inducedStartDeg, naturalZoneDeg, alphaBackDeg) {
 
+    // z-coordinates for all 5 planes
+    const zDirectSepStart = R * Math.sin(alphaFrontDeg * DEG2RAD);  // 直接分離起點
+    const zInducedZone = R * Math.sin(inducedZoneDeg * DEG2RAD); // 誘發分離區
+    const zInducedStart = R * Math.sin(inducedStartDeg * DEG2RAD);// 誘發分離起點
+    const zNaturalZone = R * Math.sin(naturalZoneDeg * DEG2RAD); // 自然分離區
+    const zInducedEnd = R * Math.sin(alphaBackDeg * DEG2RAD);   // 誘發分離終點
+
+    // ── Generate 50 slices evenly distributed in the SSW judgment zone ──
+    const zMin = Math.min(zDirectSepStart, zInducedEnd);
+    const zMax = Math.max(zDirectSepStart, zInducedEnd);
+    const numSlices = SSW_SLICE_COUNT;
     const zPlanes = [];
     for (let s = 0; s < numSlices; s++) {
-        const a = numSlices === 1 ? (aF + aB) / 2 : aF + (aB - aF) * s / (numSlices - 1);
-        zPlanes.push(R * Math.sin(a * DEG2RAD));
+        const t = numSlices === 1 ? 0.5 : s / (numSlices - 1);
+        zPlanes.push(zMin + (zMax - zMin) * t);
     }
 
     // Spin axis quaternion
@@ -31,12 +46,22 @@ export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gy
     const spinAxisQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), spinAxisDir);
     const initQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(orientX, orientY, orientZ, 'XYZ'));
 
+    // Per-slice seam presence histogram
     const histData = new Float32Array(numSlices * SSW_BINS);
+    // Per-slice SSW contribution histogram
+    const contribData = new Float32Array(numSlices * SSW_BINS);
     const present = new Uint8Array(numSlices * SSW_BINS);
     const epsilon = SEAM_TUBE_RADIUS * 1.5;
 
     const p = new THREE.Vector3();
     const localAxis = new THREE.Vector3(1, 0, 0);
+
+    // ── SSW Effect Index accumulators ──────────────────
+    const TWO_PI = Math.PI * 2;
+    const judgmentAngle = spinDirection + Math.PI / 2;
+    const L_bin = Math.round((judgmentAngle / TWO_PI) * SSW_BINS);
+
+    let effectSumA = 0, effectSumB = 0;
 
     for (let step = 0; step < SSW_ROTATION_STEPS; step++) {
         const angle = (step / SSW_ROTATION_STEPS) * Math.PI * 2;
@@ -50,13 +75,62 @@ export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gy
             const i3 = i * 3;
             p.set(seamPts[i3], seamPts[i3 + 1], seamPts[i3 + 2]).applyQuaternion(fullQuat);
 
+            // ── Histogram per-slice ──────────────────────
             for (let s = 0; s < numSlices; s++) {
                 if (Math.abs(p.z - zPlanes[s]) < epsilon) {
                     let ang = Math.atan2(p.y, p.x);
                     if (ang < 0) ang += Math.PI * 2;
                     const bin = Math.floor((ang / (Math.PI * 2)) * SSW_BINS) % SSW_BINS;
-                    present[s * SSW_BINS + bin] = 1;
+                    const idx = s * SSW_BINS + bin;
+                    present[idx] = 1;
+
+                    // Compute SSW contribution at this z-position (order-independent)
+                    const pzS = zPlanes[s];
+                    let sliceContrib = 0;
+                    // Zone check: pzS between zDirectSepStart and zInducedEnd
+                    const jMin = Math.min(zDirectSepStart, zInducedEnd);
+                    const jMax = Math.max(zDirectSepStart, zInducedEnd);
+                    if (pzS > jMin && pzS < jMax) {
+                        // Sub-zone: between directSepStart and inducedStart?
+                        const dMin = Math.min(zDirectSepStart, zInducedStart);
+                        const dMax = Math.max(zDirectSepStart, zInducedStart);
+                        if (pzS >= dMin && pzS <= dMax) {
+                            sliceContrib = Math.abs(pzS - zInducedEnd);
+                        } else {
+                            sliceContrib = Math.abs(zInducedZone - zInducedEnd);
+                        }
+                    }
+                    if (sliceContrib > 0) {
+                        contribData[idx] += sliceContrib;
+                    }
                 }
+            }
+
+            // ── SSW Effect Index contribution (order-independent) ──
+            const pz = p.z;
+            const judgeMin = Math.min(zDirectSepStart, zInducedEnd);
+            const judgeMax = Math.max(zDirectSepStart, zInducedEnd);
+            if (pz > judgeMin && pz < judgeMax) {
+                let contribution = 0;
+
+                const dirMin = Math.min(zDirectSepStart, zInducedStart);
+                const dirMax = Math.max(zDirectSepStart, zInducedStart);
+                if (pz >= dirMin && pz <= dirMax) {
+                    // Direct separation zone
+                    contribution = Math.abs(pz - zInducedEnd);
+                } else {
+                    // Induced separation judgment zone
+                    contribution = Math.abs(zInducedZone - zInducedEnd);
+                }
+
+                // Determine which half-sphere this point belongs to
+                let ang = Math.atan2(p.y, p.x);
+                if (ang < 0) ang += TWO_PI;
+                const side = Math.sin(ang - judgmentAngle);
+
+                const weightedContrib = contribution / SSW_ROTATION_STEPS;
+                if (side >= 0) effectSumA += weightedContrib;
+                else effectSumB += weightedContrib;
             }
         }
 
@@ -65,33 +139,46 @@ export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gy
         }
     }
 
-    // Normalize to percentage [0,1]
+    // SSW Effect Index = |halfA - halfB|
+    const sswEffectIndex = Math.abs(effectSumA - effectSumB);
+
+    // Normalize presence histogram to percentage [0,1]
     for (let k = 0; k < numSlices * SSW_BINS; k++) {
         histData[k] /= SSW_ROTATION_STEPS;
     }
 
+    // Normalize contribution histogram by rotation steps
+    for (let k = 0; k < numSlices * SSW_BINS; k++) {
+        contribData[k] /= SSW_ROTATION_STEPS;
+    }
+
+    // Per-slice histograms
     const histograms = [];
+    const contribHistograms = [];
     for (let s = 0; s < numSlices; s++) {
         histograms.push(histData.slice(s * SSW_BINS, (s + 1) * SSW_BINS));
+        contribHistograms.push(contribData.slice(s * SSW_BINS, (s + 1) * SSW_BINS));
     }
 
     // Combined: average across slices
     const combinedHist = new Float32Array(SSW_BINS);
+    const combinedContrib = new Float32Array(SSW_BINS);
     for (let b = 0; b < SSW_BINS; b++) {
-        let sum = 0;
-        for (let s = 0; s < numSlices; s++) sum += histograms[s][b];
-        combinedHist[b] = sum / numSlices;
+        let sumH = 0, sumC = 0;
+        for (let s = 0; s < numSlices; s++) {
+            sumH += histograms[s][b];
+            sumC += contribHistograms[s][b];
+        }
+        combinedHist[b] = sumH / numSlices;
+        combinedContrib[b] = sumC / numSlices;
     }
+
+    // Max possible SSW contribution (for legend scale)
+    const maxContribution = Math.abs(zDirectSepStart - zNaturalZone);
 
     // ── Asymmetry per user spec ────────────────────────
     const targetHist = combinedHist;
-    const TWO_PI = Math.PI * 2;
-    const judgmentAngle = spinDirection + Math.PI / 2;
 
-    // Judgment line bin index (integer — avoids all floating-point drift)
-    const L_bin = Math.round((judgmentAngle / TWO_PI) * SSW_BINS);
-
-    // Split into two halves by judgment line
     let sumA = 0, sumB = 0;
     for (let i = 0; i < SSW_BINS; i++) {
         const binAngle = (i / SSW_BINS) * TWO_PI;
@@ -100,27 +187,27 @@ export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gy
         else sumB += targetHist[i];
     }
 
-    // Asymmetry index = raw difference of sums
     const asymmetryIndex = Math.abs(sumA - sumB);
 
-    // Force direction: centroid of DIFFERENCE histogram (hist[i] - hist[mirror(i)])
-    // Mirror bin computed via INTEGER arithmetic to avoid floating-point rounding errors.
-    // Mathematically, symmetric components cancel → centroid naturally aligns with spin axis.
     let wx = 0, wy = 0;
     for (let i = 0; i < SSW_BINS; i++) {
         const binAngle = (i / SSW_BINS) * TWO_PI;
-        // Mirror of bin i across judgment line bin L_bin — exact integer arithmetic
         const j = ((2 * L_bin - i) % SSW_BINS + SSW_BINS) % SSW_BINS;
         const diff = targetHist[i] - targetHist[j];
         wx += diff * Math.cos(binAngle);
         wy += diff * Math.sin(binAngle);
     }
-    // Centroid of difference → heavy side; force is FROM heavy TO light (opposite)
     let arrowAngle = Math.atan2(-wy, -wx);
     if (arrowAngle < 0) arrowAngle += TWO_PI;
     const arrowWidth = Math.PI / 4;
 
-    return { histograms, combined: combinedHist, asymmetryIndex, arrowAngle, arrowWidth, numSlices, zPlanes };
+    return {
+        histograms, combined: combinedHist,
+        contribHistograms, combinedContrib,
+        asymmetryIndex, arrowAngle, arrowWidth,
+        numSlices, zPlanes,
+        sswEffectIndex, maxContribution,
+    };
 }
 
 /** Convert math angle (rad, 0=+X CCW) to clock string. */

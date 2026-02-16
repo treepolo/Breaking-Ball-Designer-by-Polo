@@ -103,13 +103,18 @@ body {
   text-transform: uppercase;
 }
 
-/* ── Color Legend ───────────────────────────────────── */
-#color-legend {
+/* ── Color Legend ─────────────────────────────────────── */
+#legends-container {
   position: fixed;
   bottom: 20px;
   right: 330px;
   z-index: 5;
   pointer-events: none;
+  display: flex;
+  gap: 8px;
+}
+
+.legend-card {
   background: rgba(255, 255, 255, 0.85);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 10px;
@@ -493,15 +498,19 @@ input[type="range"]::-moz-range-thumb {
   }
 
   /* ── Color Legend ── */
-  #color-legend {
+  #legends-container {
     right: auto;
     left: 10px;
     bottom: 10px;
+    flex-direction: column;
+  }
+
+  .legend-card {
     padding: 6px 8px;
     border-radius: 8px;
   }
 
-  #control-panel:not(.panel-hidden)~#color-legend {
+  #control-panel:not(.panel-hidden)~#legends-container {
     bottom: calc(40vh + 10px);
   }
 

@@ -9,7 +9,11 @@ import { R, DEG2RAD } from './constants.js';
 
 // ── Scene ────────────────────────────────────────────
 const canvas = document.getElementById('three-canvas');
-const { scene, camera, topCamera, renderer, controls, sswFrontLine, sswBackLine } = createScene(canvas);
+const {
+    scene, camera, topCamera, renderer, controls,
+    sswDirectSepStartLine, sswInducedZoneLine, sswInducedStartLine,
+    sswNaturalZoneLine, sswInducedEndLine,
+} = createScene(canvas);
 
 // ── Baseball ─────────────────────────────────────────
 const { spinAxisGroup, ballOrientationGroup, seamPointsRaw } = createBaseball();
@@ -35,15 +39,30 @@ const anim = new AnimationController(canvas, ui, (angle) => {
     updateBallOrientation(ballOrientationGroup, ui.orientX, ui.orientY, ui.orientZ, angle);
 });
 
+// ── Contribution legend elements ─────────────────────
+const contribMaxEl = document.getElementById('contrib-max');
+const contrib75El = document.getElementById('contrib-75');
+const contrib50El = document.getElementById('contrib-50');
+const contrib25El = document.getElementById('contrib-25');
+
+function updateContribLegend(maxVal) {
+    contribMaxEl.textContent = maxVal.toFixed(2);
+    contrib75El.textContent = (maxVal * 0.75).toFixed(2);
+    contrib50El.textContent = (maxVal * 0.5).toFixed(2);
+    contrib25El.textContent = (maxVal * 0.25).toFixed(2);
+}
+
 // ── Control application ──────────────────────────────
 function applyControls() {
     updateSpinAxis(spinAxisGroup, ui.spinDirection, ui.gyroAngle);
     updateBallOrientation(ballOrientationGroup, ui.orientX, ui.orientY, ui.orientZ, anim.animationAngle);
-    // Update SSW boundary indicators
-    const zF = R * Math.sin(ui.alphaFrontDeg * DEG2RAD);
-    const zB = R * Math.sin(ui.alphaBackDeg * DEG2RAD);
-    sswFrontLine.position.z = zF;
-    sswBackLine.position.z = zB;
+
+    // Update 5 SSW boundary indicators
+    sswDirectSepStartLine.position.z = R * Math.sin(ui.alphaFrontDeg * DEG2RAD);
+    sswInducedZoneLine.position.z = R * Math.sin(ui.inducedZoneDeg * DEG2RAD);
+    sswInducedStartLine.position.z = R * Math.sin(ui.inducedStartDeg * DEG2RAD);
+    sswNaturalZoneLine.position.z = R * Math.sin(ui.naturalZoneDeg * DEG2RAD);
+    sswInducedEndLine.position.z = R * Math.sin(ui.alphaBackDeg * DEG2RAD);
 }
 
 function runSSW() {
@@ -51,15 +70,24 @@ function runSSW() {
         seamPointsRaw,
         ui.orientX, ui.orientY, ui.orientZ,
         ui.spinDirection, ui.gyroAngle,
-        ui.alphaFrontDeg, ui.alphaBackDeg
+        ui.alphaFrontDeg, ui.inducedZoneDeg, ui.inducedStartDeg,
+        ui.naturalZoneDeg, ui.alphaBackDeg
     );
+
+    const mode = ui.displayMode === 'slice' ? 'slice' : 'combined';
+
     dashboard.update(
-        ui.displayMode,
-        result.histograms, result.combined, result.numSlices, result.zPlanes,
-        result.asymmetryIndex, result.arrowAngle, result.arrowWidth
+        mode,
+        result.histograms, result.combined,
+        result.contribHistograms, result.combinedContrib,
+        result.numSlices, result.zPlanes,
+        result.asymmetryIndex, result.arrowAngle, result.arrowWidth,
+        result.maxContribution
     );
     ui.setAsymmetry(result.asymmetryIndex);
+    ui.setSSWEffectIndex(result.sswEffectIndex);
     ui.setClockDirection(result.asymmetryIndex > 0.005 ? angleToClockString(result.arrowAngle) : '—');
+    updateContribLegend(result.maxContribution);
 }
 
 // ── Render loop (dual viewport) ──────────────────────
@@ -102,10 +130,8 @@ function animate(timestamp) {
     renderer.setScissorTest(true);
 
     // ── Main viewport ──────────────────────────────────
-    // On mobile: render into the visible area above the panel
-    // Viewport + aspect ratio match visible area → full scene fits, nothing clipped
     const mainW = w - panelW;
-    const visH = h - panelH;  // visible height (full height when panel hidden)
+    const visH = h - panelH;
     renderer.setViewport(0, panelH, mainW, visH);
     renderer.setScissor(0, panelH, mainW, visH);
     camera.aspect = mainW / visH;
@@ -114,7 +140,7 @@ function animate(timestamp) {
 
     // ── Mini top-down viewport ─────────────────────────
     const mx = miniPad;
-    const my = h - miniSize - miniPad; // WebGL y is bottom-up (top-left corner)
+    const my = h - miniSize - miniPad;
     renderer.setViewport(mx, my, miniSize, miniSize);
     renderer.setScissor(mx, my, miniSize, miniSize);
     renderer.render(scene, topCamera);

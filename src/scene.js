@@ -49,11 +49,19 @@ export function createScene(canvas) {
     // ── Reference objects ──────────────────────────────
     addReferenceObjects(scene);
 
-    // ── SSW plane boundary indicators ──────────────────
-    const sswFrontLine = makeIndicatorLine(0x3b82f6);
-    const sswBackLine = makeIndicatorLine(0xf59e0b);
-    scene.add(sswFrontLine);
-    scene.add(sswBackLine);
+    // ── SSW plane boundary indicators (5 planes) ───────
+    // Order front→back: 直接分離起點(淺綠), 誘發分離區(淺藍), 誘發分離起點(墨綠), 自然分離區(紅), 誘發分離終點(淺藍)
+    const sswDirectSepStartLine = makeIndicatorLine(0x86efac);   // 淺綠
+    const sswInducedZoneLine = makeIndicatorLine(0x93c5fd);   // 淺藍
+    const sswInducedStartLine = makeIndicatorLine(0x065f46);   // 墨綠
+    const sswNaturalZoneLine = makeIndicatorLine(0xef4444);   // 紅色
+    const sswInducedEndLine = makeIndicatorLine(0x93c5fd);   // 淺藍
+
+    scene.add(sswDirectSepStartLine);
+    scene.add(sswInducedZoneLine);
+    scene.add(sswInducedStartLine);
+    scene.add(sswNaturalZoneLine);
+    scene.add(sswInducedEndLine);
 
     // ── Resize ─────────────────────────────────────────
     window.addEventListener('resize', () => {
@@ -62,7 +70,11 @@ export function createScene(canvas) {
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    return { scene, camera, topCamera, renderer, controls, sswFrontLine, sswBackLine };
+    return {
+        scene, camera, topCamera, renderer, controls,
+        sswDirectSepStartLine, sswInducedZoneLine, sswInducedStartLine,
+        sswNaturalZoneLine, sswInducedEndLine,
+    };
 }
 
 function addReferenceObjects(scene) {

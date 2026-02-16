@@ -24,16 +24,31 @@
   </div>
 
   <!-- Color legend -->
-  <div id="color-legend">
-    <div class="legend-title" data-i18n="seamPresence">縫線出現時長</div>
-    <div class="legend-body">
-      <div class="legend-gradient"></div>
-      <div class="legend-labels">
-        <span>100%</span>
-        <span>75%</span>
-        <span>50%</span>
-        <span>25%</span>
-        <span>0%</span>
+  <div id="legends-container">
+    <div id="color-legend" class="legend-card">
+      <div class="legend-title" data-i18n="seamPresence">縫線出現時長</div>
+      <div class="legend-body">
+        <div class="legend-gradient"></div>
+        <div class="legend-labels">
+          <span>100%</span>
+          <span>75%</span>
+          <span>50%</span>
+          <span>25%</span>
+          <span>0%</span>
+        </div>
+      </div>
+    </div>
+    <div id="contrib-legend" class="legend-card">
+      <div class="legend-title" data-i18n="sswContribution">SSW貢獻指數</div>
+      <div class="legend-body">
+        <div class="legend-gradient"></div>
+        <div class="legend-labels" id="contrib-legend-labels">
+          <span id="contrib-max">0.00</span>
+          <span id="contrib-75">0.00</span>
+          <span id="contrib-50">0.00</span>
+          <span id="contrib-25">0.00</span>
+          <span>0</span>
+        </div>
       </div>
     </div>
   </div>
@@ -93,12 +108,28 @@
     <section class="control-section">
       <h2 class="section-title" data-i18n="sswPlane">SSW 判定平面</h2>
       <div class="slider-group">
-        <label><span data-i18n="frontBound">前邊界 α</span> <span id="val-alpha-front"
+        <label><span data-i18n="directSepStart">直接分離起點</span> <span id="val-alpha-front"
             class="slider-value">0°</span></label>
         <input type="range" id="ssw-alpha-front" min="-90" max="90" value="0" step="1" />
       </div>
       <div class="slider-group">
-        <label><span data-i18n="backBound">後邊界 α</span> <span id="val-alpha-back" class="slider-value">0°</span></label>
+        <label><span data-i18n="inducedSepZone">誘發分離區</span> <span id="val-induced-zone"
+            class="slider-value">0°</span></label>
+        <input type="range" id="ssw-induced-zone" min="-90" max="90" value="0" step="1" />
+      </div>
+      <div class="slider-group">
+        <label><span data-i18n="inducedSepStart">誘發分離起點</span> <span id="val-induced-start"
+            class="slider-value">0°</span></label>
+        <input type="range" id="ssw-induced-start" min="-90" max="90" value="0" step="1" />
+      </div>
+      <div class="slider-group">
+        <label><span data-i18n="naturalSepZone">自然分離區</span> <span id="val-natural-zone"
+            class="slider-value">0°</span></label>
+        <input type="range" id="ssw-natural-zone" min="-90" max="90" value="0" step="1" />
+      </div>
+      <div class="slider-group">
+        <label><span data-i18n="inducedSepEnd">誘發分離終點</span> <span id="val-alpha-back"
+            class="slider-value">0°</span></label>
         <input type="range" id="ssw-alpha-back" min="-90" max="90" value="0" step="1" />
       </div>
       <div class="mode-toggle">
@@ -106,8 +137,8 @@
         <div class="radio-group">
           <label class="radio-btn"><input type="radio" name="display-mode" value="combined" checked /><span
               data-i18n="combinedMode">加總顯示</span></label>
-          <label class="radio-btn"><input type="radio" name="display-mode" value="separate" /><span
-              data-i18n="separateMode">分別顯示</span></label>
+          <label class="radio-btn"><input type="radio" name="display-mode" value="slice" /><span
+              data-i18n="separateMode">切片顯示</span></label>
         </div>
       </div>
     </section>
@@ -134,6 +165,10 @@
       <div class="result-row">
         <span class="result-label" data-i18n="asymmetryIndex">不對稱指數</span>
         <span id="result-asymmetry" class="result-value">0.00</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label" data-i18n="sswEffectIndex">SSW效果指數</span>
+        <span id="result-ssw-effect" class="result-value">0.00</span>
       </div>
       <div class="result-row">
         <span class="result-label" data-i18n="forceDirection">力的方向</span>
