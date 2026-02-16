@@ -102,14 +102,13 @@ function animate(timestamp) {
     renderer.setScissorTest(true);
 
     // ── Main viewport ──────────────────────────────────
-    // Viewport shifted up by panelH/2 → centers ball in visible area
-    // Viewport size stays (mainW, h) → ball stays same size (no scaling)
-    // Scissor clips the bottom where the panel sits
+    // On mobile: render into the visible area above the panel
+    // Viewport + aspect ratio match visible area → full scene fits, nothing clipped
     const mainW = w - panelW;
-    const vpShift = Math.round(panelH / 2);
-    renderer.setViewport(0, vpShift, mainW, h);
-    renderer.setScissor(0, panelH, mainW, h - panelH);
-    camera.aspect = mainW / h;
+    const visH = h - panelH;  // visible height (full height when panel hidden)
+    renderer.setViewport(0, panelH, mainW, visH);
+    renderer.setScissor(0, panelH, mainW, visH);
+    camera.aspect = mainW / visH;
     camera.updateProjectionMatrix();
     renderer.render(scene, camera);
 

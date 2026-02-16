@@ -453,14 +453,14 @@ input[type="range"]::-moz-range-thumb {
   }
 
   #btn-toggle-panel.panel-open {
-    bottom: 50vh;
+    bottom: 40vh;
   }
 
   /* ── Control Panel as Bottom Drawer ── */
   #control-panel {
     width: 100%;
     height: auto;
-    max-height: 50vh;
+    max-height: 40vh;
     top: auto;
     bottom: 0;
     border-left: none;
@@ -502,7 +502,7 @@ input[type="range"]::-moz-range-thumb {
   }
 
   #control-panel:not(.panel-hidden)~#color-legend {
-    bottom: calc(50vh + 10px);
+    bottom: calc(40vh + 10px);
   }
 
   .legend-title {
