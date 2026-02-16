@@ -102,10 +102,12 @@ function animate(timestamp) {
     renderer.setScissorTest(true);
 
     // ── Main viewport ──────────────────────────────────
-    // Viewport = full canvas (keeps projection/ball size unchanged)
-    // Scissor = crop the bottom where the panel sits
+    // Viewport shifted up by panelH/2 → centers ball in visible area
+    // Viewport size stays (mainW, h) → ball stays same size (no scaling)
+    // Scissor clips the bottom where the panel sits
     const mainW = w - panelW;
-    renderer.setViewport(0, 0, mainW, h);
+    const vpShift = Math.round(panelH / 2);
+    renderer.setViewport(0, vpShift, mainW, h);
     renderer.setScissor(0, panelH, mainW, h - panelH);
     camera.aspect = mainW / h;
     camera.updateProjectionMatrix();
