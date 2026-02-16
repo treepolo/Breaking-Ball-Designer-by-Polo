@@ -18,7 +18,7 @@ export class UIControls {
     get orientX() { return parseFloat(this._el('orient-x').value) * DEG2RAD; }
     get orientY() { return parseFloat(this._el('orient-y').value) * DEG2RAD; }
     get orientZ() { return parseFloat(this._el('orient-z').value) * DEG2RAD; }
-    get spinDirection() { return parseFloat(this._el('spin-direction').value) * DEG2RAD; }
+    get spinDirection() { return parseFloat(this._el('spin-direction').value) * DEG2RAD + Math.PI; }
     get gyroAngle() { return parseFloat(this._el('gyro-angle').value) * DEG2RAD; }
     get spinRate() { return parseFloat(this._el('spin-rate').value); }
     get alphaFrontDeg() { return parseFloat(this._el('ssw-alpha-front').value); }
