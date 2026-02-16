@@ -12,19 +12,15 @@ import {
  *   (x, y, z) = (x0, y0, z0) / ||(x0, y0, z0)||  (then scaled by R)
  */
 export function computeSeamPoints() {
-    const k = 0.28;   // narrowed base wave
-    const m = 0.06;   // 5th harmonic, proportionally scaled
-    const h = 1.8;    // raised Z height → sphere projection squeezes inward
+    const a = 0.75;
+    const b = 0.25;
+    const c = 0.866; // ≈ 2 * sqrt(a * b), curve lies naturally on unit sphere
     const pts = new Float32Array(SEAM_POINTS * 3);
     for (let i = 0; i < SEAM_POINTS; i++) {
         const t = (i / SEAM_POINTS) * Math.PI * 2;
-        const x0 = Math.cos(t) - k * Math.cos(3 * t) + m * Math.cos(5 * t);
-        const y0 = Math.sin(t) + k * Math.sin(3 * t) + m * Math.sin(5 * t);
-        const z0 = h * Math.cos(2 * t);
-        const d = Math.sqrt(x0 * x0 + y0 * y0 + z0 * z0);
-        pts[i * 3] = (x0 / d) * R;
-        pts[i * 3 + 1] = (y0 / d) * R;
-        pts[i * 3 + 2] = (z0 / d) * R;
+        pts[i * 3] = (a * Math.cos(t) - b * Math.cos(3 * t)) * R;
+        pts[i * 3 + 1] = (a * Math.sin(t) + b * Math.sin(3 * t)) * R;
+        pts[i * 3 + 2] = c * Math.cos(2 * t) * R;
     }
     return pts;
 }
@@ -33,9 +29,8 @@ export function computeSeamPoints() {
 
 /**
  * Create a sphere-conforming rectangular patch.
- * @param {boolean} rotate90  If true, rotate texture 90° so horizontal text appears vertical on ball
  */
-function createSpherePatch(r, center, halfW, halfH, segsW, segsH, rotate90 = false) {
+function createSpherePatch(r, center, halfW, halfH, segsW, segsH) {
     const N = center.clone().normalize();
     const ref = Math.abs(N.y) < 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
     const U = new THREE.Vector3().crossVectors(N, ref).normalize();
@@ -58,12 +53,7 @@ function createSpherePatch(r, center, halfW, halfH, segsW, segsH, rotate90 = fal
             dir.normalize().multiplyScalar(r);
 
             positions.push(dir.x, dir.y, dir.z);
-
-            if (rotate90) {
-                uvs.push(v, u); // 90° CW: canvas left→patch top, canvas right→patch bottom
-            } else {
-                uvs.push(u, 1 - v);
-            }
+            uvs.push(u, 1 - v);
         }
     }
 
@@ -86,53 +76,55 @@ function createSpherePatch(r, center, halfW, halfH, segsW, segsH, rotate90 = fal
     return geo;
 }
 
-/* ── Canvas-drawn text textures (transparent bg) ────── */
+/* ── Hi-res Canvas text textures (transparent bg) ───── */
 
 function createDarkText() {
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 256;
+    canvas.width = 1024;
+    canvas.height = 512;
     const ctx = canvas.getContext('2d');
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     // "TREE" in green
-    ctx.fillStyle = '#00A651';
-    ctx.font = 'bold 110px Arial, sans-serif';
-    ctx.fillText('TREE', 256, 85);
+    ctx.fillStyle = '#009B4D';
+    ctx.font = 'bold 200px Arial, sans-serif';
+    ctx.fillText('TREE', 512, 170);
 
-    // "POLO" in lime green
-    ctx.fillStyle = '#ADFF2F';
-    ctx.font = 'bold 110px Arial, sans-serif';
-    ctx.fillText('POLO', 256, 195);
+    // "POLO" in natural bright green (not neon)
+    ctx.fillStyle = '#7CB342';
+    ctx.font = 'bold 200px Arial, sans-serif';
+    ctx.fillText('POLO', 512, 380);
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
     return tex;
 }
 
 function createLightText() {
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 200;
+    canvas.width = 1024;
+    canvas.height = 280;
     const ctx = canvas.getContext('2d');
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     // "TREEPOLO" in green
-    ctx.fillStyle = '#00A651';
-    ctx.font = 'bold 64px Arial, sans-serif';
-    ctx.fillText('TREEPOLO', 256, 65);
+    ctx.fillStyle = '#009B4D';
+    ctx.font = 'bold 120px Arial, sans-serif';
+    ctx.fillText('TREEPOLO', 512, 105);
 
-    // "About Science of Baseball" in black
-    ctx.fillStyle = '#000000';
-    ctx.font = '34px Arial, sans-serif';
-    ctx.fillText('About Science of Baseball', 256, 145);
+    // "About Science of Baseball" in dark grey — tight spacing
+    ctx.fillStyle = '#1a1a1a';
+    ctx.font = '64px Arial, sans-serif';
+    ctx.fillText('About Science of Baseball', 512, 200);
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
     return tex;
 }
 
@@ -181,29 +173,27 @@ export function createBaseball() {
     seamMesh.name = 'SeamMesh';
     ballOrientationGroup.add(seamMesh);
 
-    // ── Text logos (Canvas, transparent bg, rotated 90°) ──
-    // Both on the front face (+Z), separated by the seam.
-    // UV rotate90 = true maps horizontal canvas text to vertical on the ball.
+    // ── Text logos (Canvas, transparent bg, hi-res) ────────
     const logoR = R * 1.004;
-    const tiltAngle = 0.30; // ~17° above/below centre
+    const DEG60 = Math.PI / 3; // 60°
 
-    // Dark text — above seam (tall narrow patch, 3x text)
-    const darkCenter = new THREE.Vector3(0, Math.sin(tiltAngle), Math.cos(tiltAngle)).normalize();
-    const darkGeo = createSpherePatch(logoR, darkCenter, 0.18, 0.52, 24, 24, true);
-    const darkTex = createDarkText();
-    const darkMat = new THREE.MeshBasicMaterial({ map: darkTex, transparent: true, depthWrite: false });
-    const darkLogo = new THREE.Mesh(darkGeo, darkMat);
-    darkLogo.name = 'LogoDark';
-    ballOrientationGroup.add(darkLogo);
-
-    // Light text — below seam (tall narrow patch, 2x text)
-    const lightCenter = new THREE.Vector3(0, -Math.sin(tiltAngle), Math.cos(tiltAngle)).normalize();
-    const lightGeo = createSpherePatch(logoR, lightCenter, 0.16, 0.46, 24, 24, true);
+    // Light text — curved sphere patch at -Z face, 2x size
+    const lightCenter = new THREE.Vector3(0, 0, -1);
+    const lightGeo = createSpherePatch(logoR, lightCenter, 0.40, 0.24, 32, 32);
     const lightTex = createLightText();
     const lightMat = new THREE.MeshBasicMaterial({ map: lightTex, transparent: true, depthWrite: false });
     const lightLogo = new THREE.Mesh(lightGeo, lightMat);
     lightLogo.name = 'LogoLight';
     ballOrientationGroup.add(lightLogo);
+
+    // Dark text — 60° above white logo (rotated 180° around Y)
+    const darkCenter = new THREE.Vector3(0, Math.sin(DEG60), -Math.cos(DEG60)).normalize();
+    const darkGeo = createSpherePatch(logoR, darkCenter, 0.32, 0.20, 32, 32);
+    const darkTex = createDarkText();
+    const darkMat = new THREE.MeshBasicMaterial({ map: darkTex, transparent: true, depthWrite: false });
+    const darkLogo = new THREE.Mesh(darkGeo, darkMat);
+    darkLogo.name = 'LogoDark';
+    ballOrientationGroup.add(darkLogo);
 
     // ── Spin axis line ─────────────────────────────────────
     const axisLen = R + AXIS_EXTEND * R; // 1.3R
