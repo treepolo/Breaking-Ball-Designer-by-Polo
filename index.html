@@ -108,6 +108,11 @@
         <input type="range" id="gyro-angle" min="-90" max="90" value="0" step="1" />
       </div>
       <div class="slider-group">
+        <label><span data-i18n="spinEfficiency">旋轉效率</span> <input type="number" id="val-spin-efficiency"
+            class="slider-input" value="100" min="0" max="100">%</label>
+        <input type="range" id="spin-efficiency" min="0" max="100" value="100" step="1" />
+      </div>
+      <div class="slider-group">
         <label><span data-i18n="spinRate">轉速</span> <input type="number" id="val-rpm" class="slider-input" value="1800"
             min="0" max="3000"></label>
         <input type="range" id="spin-rate" min="0" max="3000" value="1800" step="10" />
@@ -149,6 +154,17 @@
               data-i18n="combinedMode">加總顯示</span></label>
           <label class="radio-btn"><input type="radio" name="display-mode" value="slice" /><span
               data-i18n="separateMode">切片顯示</span></label>
+        </div>
+      </div>
+
+      <!-- Visibility Toggles -->
+      <div class="mode-toggle" style="margin-top: 10px;">
+        <label class="mode-label" data-i18n="layerVisibility">圖層顯示</label>
+        <div class="radio-group">
+          <label class="radio-btn"><input type="checkbox" id="check-visible-seam" checked /><span
+              data-i18n="seamPresence">縫線出現時長</span></label>
+          <label class="radio-btn"><input type="checkbox" id="check-visible-contrib" checked /><span
+              data-i18n="sswContribution">SSW貢獻指數</span></label>
         </div>
       </div>
     </section>

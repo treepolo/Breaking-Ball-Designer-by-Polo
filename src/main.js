@@ -41,7 +41,8 @@ sswWorker.onmessage = (e) => {
         result.contribHistograms, result.combinedContrib,
         result.numSlices, result.zPlanes,
         result.asymmetryIndex, result.arrowAngle, result.arrowWidth,
-        result.maxContribution
+        result.maxContribution,
+        ui.visibleSeam, ui.visibleContrib // Pass visibility flags
     );
     ui.setAsymmetry(result.asymmetryIndex);
     ui.setSSWEffectIndex(result.sswEffectIndex);
@@ -74,6 +75,10 @@ const ui = new UIControls(({ key }) => {
     if (key === 'pitcherView') { setPitcherView(camera, controls); return; }
     if (key === 'catcherView') { setCatcherView(camera, controls); return; }
     if (key === 'spinRate') return;
+    if (key === 'visibleSeam' || key === 'visibleContrib') {
+        dashboard.setVisibility(ui.visibleSeam, ui.visibleContrib);
+        return;
+    }
     needsSSWUpdate = true;
 });
 

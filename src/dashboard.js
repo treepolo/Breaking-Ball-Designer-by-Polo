@@ -23,6 +23,16 @@ export class Dashboard {
         this._buildRing('contrib');
         this._buildArrow();
         this._buildGlowRing();
+
+        this.visibleSeam = true;
+        this.visibleContrib = true;
+    }
+
+    setVisibility(seam, contrib) {
+        this.visibleSeam = seam;
+        this.visibleContrib = contrib;
+        if (this.seamRingMesh) this.seamRingMesh.visible = seam;
+        if (this.contribRingMesh) this.contribRingMesh.visible = contrib;
     }
 
     _buildRing(type) {
@@ -100,9 +110,15 @@ export class Dashboard {
      * @param {number} arrowAngle
      * @param {number} arrowWidth
      * @param {number} maxContribution - max value for contribution color scale
+     * @param {boolean} visibleSeam - passed from update if needed, but we use internal state or method
+     * @param {boolean} visibleContrib
      */
     update(mode, histograms, combined, contribHistograms, combinedContrib,
-        numSlices, zPlanes, asymmetryIndex, arrowAngle, arrowWidth, maxContribution) {
+        numSlices, zPlanes, asymmetryIndex, arrowAngle, arrowWidth, maxContribution,
+        visibleSeam = true, visibleContrib = true) {
+
+        // Update internal state just in case
+        this.setVisibility(visibleSeam, visibleContrib);
 
         const innerR = R + DASHBOARD_GAP;
         const seamOuter = innerR + DASHBOARD_HEAT_WIDTH;

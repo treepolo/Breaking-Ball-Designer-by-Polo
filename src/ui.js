@@ -10,6 +10,7 @@ export class UIControls {
         this._bindPlayPause();
         this._bindDragAxis();
         this._bindDisplayMode();
+        this._bindVisibility();
         this._bindLang();
         this._bindViewButtons();
         setLang('zh-TW'); // initialize
@@ -34,6 +35,8 @@ export class UIControls {
         const checked = document.querySelector('input[name="drag-axis"]:checked');
         return checked ? checked.value : 'x';
     }
+    get visibleSeam() { return this._el('check-visible-seam').checked; }
+    get visibleContrib() { return this._el('check-visible-contrib').checked; }
 
     setOrientX(deg) { this._el('orient-x').value = deg; this._el('val-orient-x').value = Math.round(deg); }
     setOrientY(deg) { this._el('orient-y').value = deg; this._el('val-orient-y').value = Math.round(deg); }
@@ -54,7 +57,9 @@ export class UIControls {
             { id: 'orient-y', label: 'val-orient-y', key: 'orientY' },
             { id: 'orient-z', label: 'val-orient-z', key: 'orientZ' },
             { id: 'spin-direction', label: 'val-spin-dir', key: 'spinDirection', isClock: true },
+            { id: 'spin-direction', label: 'val-spin-dir', key: 'spinDirection', isClock: true },
             { id: 'gyro-angle', label: 'val-gyro', key: 'gyroAngle' },
+            { id: 'spin-efficiency', label: 'val-spin-efficiency', key: 'spinEfficiency' },
             { id: 'spin-rate', label: 'val-rpm', key: 'spinRate' },
             { id: 'ssw-alpha-front', label: 'val-alpha-front', key: 'alphaFront' },
             { id: 'ssw-induced-zone', label: 'val-induced-zone', key: 'inducedZone' },
@@ -109,6 +114,60 @@ export class UIControls {
                     } else {
                         rangeEl.value = val;
                     }
+
+                    // Special Sync: Gyro Angle <-> Spin Efficiency
+                    if (s.key === 'gyroAngle') {
+                        // val is Gyro (deg). Efficiency = abs(cos(gyro)) * 100
+                        const rad = val * DEG2RAD;
+                        const eff = Math.abs(Math.cos(rad)) * 100;
+                        // Update Efficiency UI
+                        const effRange = this._el('spin-efficiency');
+                        const effInput = this._el('val-spin-efficiency');
+                        if (effRange && effInput) { // check existence
+                            effRange.value = eff;
+                            effInput.value = Math.round(eff * 10) / 10; // 1 decimal? or int? slider step is 1.
+                            // But let's follow input precision if needed. Sliders are step 1 usually?
+                            // html step is 1 for efficiency.
+                            effInput.value = Math.round(eff);
+                        }
+                    } else if (s.key === 'spinEfficiency') {
+                        // val is Efficiency (0-100). Gyro = acos(eff/100)
+                        // We need to preserve the sign of the CURRENT gyro angle.
+                        const currentGyro = parseFloat(this._el('gyro-angle').value);
+                        const sign = currentGyro < 0 ? -1 : 1;
+
+                        // Clamp val 0-100
+                        let safeVal = Math.max(0, Math.min(100, val));
+
+                        // acos returns [0, PI]. Convert to deg.
+                        let deg = Math.acos(safeVal / 100) * (180 / Math.PI);
+                        deg = deg * sign;
+
+                        // Update Gyro UI
+                        const gyroRange = this._el('gyro-angle');
+                        const gyroInput = this._el('val-gyro');
+                        if (gyroRange && gyroInput) {
+                            gyroRange.value = deg;
+                            gyroInput.value = Math.round(deg);
+                        }
+
+                        // Force the main update to be about gyroAngle because that's what physics uses?
+                        // The `onChange` below sends `spinEfficiency`. Main.js should likely ignore it or we should send gyroAngle too.
+                        // But `onChange` takes one {key, value}.
+                        // So we should hijack and call `this.onChange` with 'gyroAngle' instead?
+                        // OR we rely on the fact that we updated the Gyro slider, but we need to trigger the physics update.
+                        // Let's call this.onChange with gyroAngle as well or instead.
+
+                        this.onChange({ key: 'gyroAngle', value: deg * DEG2RAD }); // Send rads? No, logic above sends `parseFloat(rangeEl.value)` which is deg usually?
+                        // Wait, `this.onChange({ key: s.key, value: parseFloat(rangeEl.value) });`
+                        // UIControls getters convert to radians.
+                        // The callback expects raw value or computed?
+                        // In main.js: `if (key === 'spinRate') return; needsSSWUpdate = true;`
+                        // It just reads from `ui.gyroAngle` getter.
+                        // So as long as we updated the UI element (which getter reads), we are good!
+                        // But we need to trigger the callback to say "something changed, update SSW".
+                        // So falling through to `this.onChange` with `spinEfficiency` is fine, as long as main.js triggers update.
+                    }
                 }
 
                 // If we corrected 'val' due to constraints, update source too if needed
@@ -147,6 +206,11 @@ export class UIControls {
         document.querySelectorAll('input[name="display-mode"]').forEach(r => {
             r.addEventListener('change', () => this.onChange({ key: 'displayMode', value: r.value }));
         });
+    }
+
+    _bindVisibility() {
+        this._el('check-visible-seam').addEventListener('change', (e) => this.onChange({ key: 'visibleSeam', value: e.target.checked }));
+        this._el('check-visible-contrib').addEventListener('change', (e) => this.onChange({ key: 'visibleContrib', value: e.target.checked }));
     }
 
     _bindLang() {
