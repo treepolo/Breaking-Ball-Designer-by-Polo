@@ -12,9 +12,9 @@ import {
  *   (x, y, z) = (x0, y0, z0) / ||(x0, y0, z0)||  (then scaled by R)
  */
 export function computeSeamPoints() {
-    const k = 0.22;   // narrowed to shrink overall width
-    const m = 0.05;   // 5th harmonic, scaled proportionally
-    const h = 1.35;   // lowered Z height → shorter horseshoe length
+    const k = 0.35;   // base wave coefficient
+    const m = 0.08;   // 5th harmonic – flattens U-bend sides
+    const h = 1.5;    // controls narrow-waist distance
     const pts = new Float32Array(SEAM_POINTS * 3);
     for (let i = 0; i < SEAM_POINTS; i++) {
         const t = (i / SEAM_POINTS) * Math.PI * 2;
@@ -92,8 +92,8 @@ function createSpherePatch(r, center, halfW, halfH, segsW, segsH, cornerR = 0) {
             const b = a + 1;
             const c = a + (segsW + 1);
             const d = c + 1;
-            indices.push(a, b, d);
-            indices.push(a, d, c);
+            indices.push(a, d, b);
+            indices.push(a, c, d);
         }
     }
 
