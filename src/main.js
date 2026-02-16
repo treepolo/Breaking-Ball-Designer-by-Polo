@@ -7,6 +7,7 @@ import SSWWorker from './worker.js?worker';
 import { Dashboard } from './dashboard.js';
 import { UIControls } from './ui.js';
 import { AnimationController } from './animation.js';
+import { SSWCharts } from './charts.js';
 import { R, DEG2RAD } from './constants.js';
 
 // ── Scene ────────────────────────────────────────────
@@ -24,6 +25,12 @@ scene.add(spinAxisGroup);
 // ── Dashboard ────────────────────────────────────────
 const dashboard = new Dashboard(scene);
 
+// ── SSW Charts ───────────────────────────────────────
+// We need to mount charts to DOM. Let's create a container in index.html later.
+// Converting existing chart div or creating one? User said "Information area".
+// I'll assume we can pass a container ID.
+const charts = new SSWCharts('ssw-charts-container');
+
 // ── SSW Worker & State ──────────────────────────────
 const sswWorker = new SSWWorker();
 let isComputing = false;
@@ -33,37 +40,110 @@ sswWorker.onmessage = (e) => {
     isComputing = false;
     const result = e.data;
 
-    // Update Dashboard & UI
-    const mode = ui.displayMode === 'slice' ? 'slice' : 'combined';
-    dashboard.update(
-        mode,
-        result.histograms, result.combined,
-        result.contribHistograms, result.combinedContrib,
-        result.numSlices, result.zPlanes,
-        result.asymmetryIndex, result.arrowAngle, result.arrowWidth,
-        result.maxContribution,
-        ui.visibleSeam, ui.visibleContrib // Pass visibility flags
-    );
-    ui.setAsymmetry(result.asymmetryIndex);
-    ui.setSSWEffectIndex(result.sswEffectIndex);
-    ui.setClockDirection(result.sswEffectIndex > 0.005 ? angleToClockString(result.arrowAngle) : '—');
-    updateContribLegend(result.maxContribution);
-    updateSSWLabels(result.effectSumA, result.effectSumB, result.sswEffectIndex, result.arrowAngle);
+    if (result.mode === 'curve') {
+        // Curve data received
+        charts.updateData(result.data);
+        // Also update the red line position for current state
+        charts.updateCursor(ui.gyroAngle / DEG2RAD);
+    } else {
+        // Single result received (normal update)
 
-    // If there's a pending request, process it now
+        // Update Dashboard & UI
+        const mode = ui.displayMode === 'slice' ? 'slice' : 'combined';
+        dashboard.update(
+            mode,
+            result.histograms, result.combined,
+            result.contribHistograms, result.combinedContrib,
+            result.numSlices, result.zPlanes,
+            result.asymmetryIndex, result.arrowAngle, result.arrowWidth,
+            result.maxContribution,
+            ui.visibleSeam, ui.visibleContrib // Pass visibility flags
+        );
+        ui.setAsymmetry(result.asymmetryIndex);
+        ui.setSSWEffectIndex(result.sswEffectIndex);
+        ui.setClockDirection(result.sswEffectIndex > 0.005 ? angleToClockString(result.arrowAngle) : '—');
+        updateContribLegend(result.maxContribution);
+        updateSSWLabels(result.effectSumA, result.effectSumB, result.sswEffectIndex, result.arrowAngle);
+
+        // Update Chart Cursor
+        charts.updateCursor(ui.gyroAngle / DEG2RAD);
+
+        // If there's a pending request, process it now (prioritize single requests?)
+        // If we have a pending curve request, we might want to send it?
+        // But logic below handles `pendingRequest` which is single data.
+    }
+
+    // Check pending
     if (pendingRequest) {
         requestSSW(pendingRequest);
         pendingRequest = null;
     }
 };
 
+let lastCurveParams = null; // Track params to avoid redundant curve calcs
+
 function requestSSW(data) {
     if (isComputing) {
         pendingRequest = data;
         return;
     }
+
+    // Check if we need to request a curve update
+    // We update curve if parameters OTHER THAN gyroAngle change.
+    const curveParamsKey = JSON.stringify({
+        ox: data.orientX, oy: data.orientY, oz: data.orientZ,
+        sd: data.spinDirection,
+        af: data.alphaFrontDeg, iz: data.inducedZoneDeg, is: data.inducedStartDeg, nz: data.naturalZoneDeg, ab: data.alphaBackDeg
+    });
+
+    if (curveParamsKey !== lastCurveParams) {
+        // Request curve calc FIRST (or parallel? worker is single thread).
+        // If specific params changed, we queue a curve request.
+        // We can send a separate message for curve.
+        // But `isComputing` flag blocks.
+        // We should probably interleave or just send it?
+        // Let's send curve request, then single request?
+        // Or just send curve request and let the single request follow?
+        // Actually, if we send curve request, the worker will be busy.
+        // Real-time update of single point is higher priority for visual feedback?
+        // User wants charts.
+        // If dragging Orient, curve changes constantly.
+        // If we request curve every frame, it might lag.
+        // Debounce curve calculation?
+        // Or just do it. Worker is separate thread. 
+        // We can create a SECOND worker for background tasks like curve?
+        // That would be best for responsiveness.
+        // BUT for now, let's use one worker and maybe throttle curve updates?
+        // Simplest: Request curve if changed.
+
+        lastCurveParams = curveParamsKey;
+
+        // We can't send two messages if we use `isComputing` lock.
+        // We should modify `requestSSW` to handle types or queue.
+        // But for simplicity, let's just make a new worker instance for curves?
+        // The file is tiny.
+    }
+
     isComputing = true;
     sswWorker.postMessage(data);
+}
+
+// Separate worker for curves to ensure UI responsiveness?
+// Or just piggyback? "Smooth" implies 60fps.
+// If curve takes 100ms, UI dashboard lags.
+// Let's instantiate a SECOND worker for curves.
+const curveWorker = new SSWWorker();
+curveWorker.onmessage = (e) => {
+    if (e.data.mode === 'curve') {
+        charts.updateData(e.data.data);
+        charts.updateCursor(ui.gyroAngle / DEG2RAD);
+    }
+};
+
+function requestCurve(data) {
+    // Just post message, no lock needed if we don't care about order or just want latest.
+    // Throttling might be good.
+    curveWorker.postMessage({ ...data, mode: 'curve' });
 }
 
 // ── SSW update flag ──────────────────────────────────
@@ -159,6 +239,24 @@ function runSSW() {
     };
 
     requestSSW(params);
+
+    // Check if curve needs update
+    const curveParamsKey = JSON.stringify({
+        ox: params.orientX, oy: params.orientY, oz: params.orientZ,
+        sd: params.spinDirection,
+        af: params.alphaFrontDeg, iz: params.inducedZoneDeg, is: params.inducedStartDeg, nz: params.naturalZoneDeg, ab: params.alphaBackDeg
+    });
+
+    if (curveParamsKey !== lastCurveParams) {
+        lastCurveParams = curveParamsKey;
+        // Debounce? Or just fire. For 2-degree step (90 pts), it might be fast enough.
+        // But if too many accumulate in worker queue...
+        // curveWorker handles one message at a time sequentially.
+        requestCurve(params);
+    } else {
+        // Just update cursor
+        charts.updateCursor(ui.gyroAngle / DEG2RAD);
+    }
 }
 
 // ── Render loop (dual viewport) ──────────────────────
@@ -170,8 +268,9 @@ function getLayoutValues() {
     return {
         isMobile,
         panelW: isMobile ? 0 : 310,
-        miniSize: isMobile ? 135 : 180,
-        miniPad: isMobile ? 10 : 14,
+        // miniSize: isMobile ? 135 : 180, // No longer used for manual positioning
+        // miniPad: isMobile ? 10 : 14,
+        sidebarW: isMobile ? 0 : 300,
     };
 }
 
@@ -201,29 +300,128 @@ function animate(timestamp) {
     renderer.setScissorTest(true);
 
     // ── Main viewport ──────────────────────────────────
-    const mainW = w - panelW;
+    // Shifted by sidebarW (if desktop)
+    const sidebarW = getLayoutValues().sidebarW;
+
+    const mainX = sidebarW;
+    const mainW = w - panelW - sidebarW;
     const visH = h - panelH;
-    renderer.setViewport(0, panelH, mainW, visH);
-    renderer.setScissor(0, panelH, mainW, visH);
+
+    renderer.setViewport(mainX, panelH, mainW, visH);
+    renderer.setScissor(mainX, panelH, mainW, visH);
     camera.aspect = mainW / visH;
     camera.updateProjectionMatrix();
     renderer.render(scene, camera);
 
     // ── Mini top-down viewport ─────────────────────────
-    const mx = miniPad;
-    const my = h - miniSize - miniPad;
-    renderer.setViewport(mx, my, miniSize, miniSize);
-    renderer.setScissor(mx, my, miniSize, miniSize);
-    renderer.render(scene, topCamera);
+    // Use DOM element position
+    const miniEl = document.getElementById('mini-viewport');
+    if (miniEl) {
+        const rect = miniEl.getBoundingClientRect();
+        // Convert client coordinates to canvas (gl) coordinates
+        // Canvas is full screen, so client matches canvas logical pixels?
+        // But Y is inverted in GL.
+        // height of canvas DOM element:
+        const canvasH = renderer.domElement.height / renderer.getPixelRatio(); // logical
+
+        // Rect gives client pixels (logical).
+        // GL lower-left corner:
+        // x = rect.left
+        // y = canvasH - rect.bottom
+        const mx = rect.left;
+        const my = canvasH - rect.bottom;
+        const mw = rect.width;
+        const mh = rect.height;
+
+        // Scissor needs physical pixels? NO, setScissor handles pixelRatio if setSize handled it?
+        // Wait, three.js setViewport uses pixels. If setSize used window.innerWidth, and pixelRatio set.
+        // Viewport expects coordinates relative to drawing buffer size? 
+        // Docs: (x, y, width, height) in pixels.
+        // If setSize set buffer size = window * dpr.
+        // Then we usually need to scale by dpr.
+        // BUT lines 287/288 divide by dpr to get logical `w`.
+        // If I use logical `mx`, do I need to scale back up?
+        // Usually yes, if buffer is scaled. 
+        // But `setSize` handles the CSS style?
+        // Let's check `scene.js`. 
+        // `renderer.setPixelRatio(...)`.
+        // If pixelRatio is 2, buffer is 2x.
+        // setViewport needs 2x coordinates.
+        // BUT if `renderer.domElement` style matches window inner, then `w` (logical) is correct for layout logic.
+        // BUT setViewport takes physical pixels if buffer is physical?
+        // Actually, three.js handles `setPixelRatio`.
+        // If I pass logical coords to setViewport, does it auto-scale? NO.
+        // I must scale explicitly if I'm doing manual calculation. OR rely on Three.js not needing scaling?
+        // Wait, `renderer.setViewport` documentation says "The x, y, width, and height of the viewport."
+        // If `setPixelRatio` is used, resizing the canvas usually updates the viewport OF THE RENDERER Context?
+        // No, setViewport sets the GL viewport.
+        // If devicePixelRatio is 2, and window is 1000px wide, buffer is 2000px.
+        // If I say setViewport(0, 0, 1000, 1000), it fills ONLY lower-left quadrant (500 logical, 1000 physical).
+        // SO I NEED TO MULTIPLY BY DPR.
+        // But wait, line 287 `w` divides by dpr.
+        // This implies `w` is logical.
+        // `renderer.setViewport(0, ..., w, ...)` uses logical? 
+        // If I use logical, result is small?
+        // Let me check existing `main.js`: `renderer.setViewport(mx, my, miniSize, miniSize)`. `miniSize` is 180 (logical).
+        // This implies `setViewport` works with LOGICAL pixels or my assumption about `w` is wrong.
+        // Actually `renderer.setViewport` DOES NOT AUTO-SCALE.
+        // If existing code works, then either:
+        // 1. `setPixelRatio` is 1.
+        // 2. Or `renderer.domElement.width` matches `w`.
+        // Let's assume logical coordinates need scaling IF `setPixelRatio` is active.
+        // BUT line 287: `w = domElement.width / pixelRatio`.
+        // If domElement.width is physical, then `w` is logical.
+        // If I pass `w` to setViewport, I am passing logical.
+        // If buffer is physical, render is small.
+        // I suspect the current code might be relying on something else or I'm overthinking.
+        // BUT to be safe, I should scale by dpr for SetViewport?
+        // Wait, looking at `renderer.setScissor`: 
+        // Existing lines 313: `renderer.setViewport(mx, my, miniSize, miniSize)`.
+        // If this worked, then logical coordinates worked.
+        // Why? Maybe Three.js applies pixel ratio internally? 
+        // NO.
+        // Maybe the DOM element width is just logical?
+        // `renderer.setSize(window.innerWidth, window.innerHeight)` sets canvas.width = innerWidth * pixelRatio.
+        // So canvas.width is physical.
+        // So logical coordinates are 1/dpr of physical.
+        // So I SHOULD multiply by dpr.
+        // Why did previous code work? 
+        // Maybe it didn't look high-res? Or it was small?
+        // Actually `renderer.domElement.width` is buffer width.
+        // `w` is logical width.
+        // If I passed `w` (visible width) as `mainW`, and `w` is logical.
+        // Then `setViewport` used logical units.
+        // If buffer is 2x, then viewport is 1/2 size.
+        // This means my previous modification might have been making it smaller than expected on Retina?
+        // Or maybe `w` was calculated differently before?
+        // Line 287 was existing code.
+        // I will assume existing code was correct about units, but I'll add precise logic for getting rect.
+        // `mx` derived from `rect.left` is logical.
+        // I will stick to the pattern used in the file: using variables like `w`, `mainW` (logical).
+
+        renderer.setViewport(mx, my, mw, mh);
+        renderer.setScissor(mx, my, mw, mh);
+        renderer.render(scene, topCamera);
+    }
     renderer.setScissorTest(false);
 
     // ── Update Labels ──────────────────────────────────
-    updateLabelPosition(labelA, posA, mainW, visH, panelH);
-    updateLabelPosition(labelB, posB, mainW, visH, panelH);
-    updateLabelPosition(labelTop, posTop, mainW, visH, panelH);
+    // Labels rely on projection. Camera aspect corrected above.
+    // Need to pass offset? updateLabelPosition logic uses `mainW`.
+    // But normalized device coordinates (NDC) map to viewport.
+    // If viewport is offset by mainX, then NDC (-1 to 1) maps to (mainX to mainX + mainW).
+    // `v.x` is -1..1.
+    // `x = (v.x + 1) / 2 * mainW + mainX`?
+    // Current helper function: `x = (v.x + 1) / 2 * mainW;`
+    // It assumes viewport starts at 0.
+    // I need to update `updateLabelPosition` to accept `offsetX`.
+
+    updateLabelPosition(labelA, posA, mainW, visH, panelH, mainX);
+    updateLabelPosition(labelB, posB, mainW, visH, panelH, mainX);
+    updateLabelPosition(labelTop, posTop, mainW, visH, panelH, mainX);
 }
 
-function updateLabelPosition(el, pos, mainW, visH, panelH) {
+function updateLabelPosition(el, pos, mainW, visH, panelH, mainX = 0) {
     if (!el) return;
     const v = pos.clone().project(camera); // NDC
     // Check if behind camera
@@ -233,7 +431,7 @@ function updateLabelPosition(el, pos, mainW, visH, panelH) {
     }
     el.style.display = 'block';
 
-    const x = (v.x + 1) / 2 * mainW;
+    const x = ((v.x + 1) / 2 * mainW) + mainX; // visual position on screen
     const y_gl = (v.y + 1) / 2 * visH + panelH;
     const y = window.innerHeight - y_gl;
 

@@ -58,7 +58,7 @@ export class Dashboard {
           if (vColor.a < 0.01) discard;
           gl_FragColor = vColor;
         }`,
-            transparent: true, side: THREE.DoubleSide, depthWrite: false,
+            transparent: true, side: THREE.DoubleSide, depthWrite: true,
         });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.renderOrder = 1;

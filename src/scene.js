@@ -11,6 +11,7 @@ export function createScene(canvas) {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.autoClear = false; // we clear manually for dual viewport
+    renderer.setClearColor(0xd0d8e4); // Match scene background
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
 
@@ -23,7 +24,8 @@ export function createScene(canvas) {
     camera.lookAt(0, 0, 0);
 
     // ── Top-down camera (orthographic) ─────────────────
-    const topSize = 2;
+    // Reduced topSize to zoom in (User wants ball bigger)
+    const topSize = 1.3;
     const topCamera = new THREE.OrthographicCamera(-topSize, topSize, topSize, -topSize, 0.1, 100);
     topCamera.position.set(0, 8, 0);
     topCamera.up.set(0, 0, -1); // -Z = up on screen (movement direction = up)

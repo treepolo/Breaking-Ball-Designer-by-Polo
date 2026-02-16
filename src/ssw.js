@@ -20,7 +20,7 @@ import { R, SEAM_POINTS, SSW_ROTATION_STEPS, SSW_BINS, SSW_SLICE_COUNT, DEG2RAD,
  * 5 planes (front→back): 直接分離起點 ≤ 誘發分離區 ≤ 誘發分離起點 ≤ 自然分離區 ≤ 誘發分離終點
  */
 export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gyroAngle,
-    alphaFrontDeg, inducedZoneDeg, inducedStartDeg, naturalZoneDeg, alphaBackDeg) {
+    alphaFrontDeg, inducedZoneDeg, inducedStartDeg, naturalZoneDeg, alphaBackDeg, fast = false) {
 
     // z-coordinates for all 5 planes
     const zDirectSepStart = R * Math.sin(alphaFrontDeg * DEG2RAD);  // 直接分離起點
@@ -32,7 +32,7 @@ export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gy
     // ── Generate 50 slices evenly distributed in the SSW judgment zone ──
     const zMin = Math.min(zDirectSepStart, zInducedEnd);
     const zMax = Math.max(zDirectSepStart, zInducedEnd);
-    const numSlices = SSW_SLICE_COUNT;
+    const numSlices = fast ? 10 : SSW_SLICE_COUNT;
     const zPlanes = [];
     for (let s = 0; s < numSlices; s++) {
         const t = numSlices === 1 ? 0.5 : s / (numSlices - 1);
@@ -63,8 +63,9 @@ export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gy
 
     let effectSumA = 0, effectSumB = 0;
 
-    for (let step = 0; step < SSW_ROTATION_STEPS; step++) {
-        const angle = (step / SSW_ROTATION_STEPS) * Math.PI * 2;
+    const steps = fast ? 36 : SSW_ROTATION_STEPS;
+    for (let step = 0; step < steps; step++) {
+        const angle = (step / steps) * Math.PI * 2;
         const spinQuat = new THREE.Quaternion().setFromAxisAngle(localAxis, angle);
         const mid = spinQuat.clone().multiply(initQuat);
         const fullQuat = spinAxisQuat.clone().multiply(mid);
@@ -128,7 +129,7 @@ export function computeSSW(seamPts, orientX, orientY, orientZ, spinDirection, gy
                 if (ang < 0) ang += TWO_PI;
                 const side = Math.sin(ang - judgmentAngle);
 
-                const weightedContrib = contribution / SSW_ROTATION_STEPS;
+                const weightedContrib = contribution / steps;
                 if (side >= 0) effectSumA += weightedContrib;
                 else effectSumB += weightedContrib;
             }
