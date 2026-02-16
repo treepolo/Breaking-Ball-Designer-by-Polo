@@ -2,7 +2,8 @@ import './style.css';
 import * as THREE from 'three';
 import { createScene, setPitcherView, setCatcherView } from './scene.js';
 import { createBaseball, updateSpinAxis, updateBallOrientation } from './baseball.js';
-import { computeSSW, angleToClockString } from './ssw.js';
+import { angleToClockString } from './ssw.js';
+import SSWWorker from './worker.js?worker';
 import { Dashboard } from './dashboard.js';
 import { UIControls } from './ui.js';
 import { AnimationController } from './animation.js';
@@ -22,6 +23,47 @@ scene.add(spinAxisGroup);
 
 // ── Dashboard ────────────────────────────────────────
 const dashboard = new Dashboard(scene);
+
+// ── SSW Worker & State ──────────────────────────────
+const sswWorker = new SSWWorker();
+let isComputing = false;
+let pendingRequest = null;
+
+sswWorker.onmessage = (e) => {
+    isComputing = false;
+    const result = e.data;
+
+    // Update Dashboard & UI
+    const mode = ui.displayMode === 'slice' ? 'slice' : 'combined';
+    dashboard.update(
+        mode,
+        result.histograms, result.combined,
+        result.contribHistograms, result.combinedContrib,
+        result.numSlices, result.zPlanes,
+        result.asymmetryIndex, result.arrowAngle, result.arrowWidth,
+        result.maxContribution
+    );
+    ui.setAsymmetry(result.asymmetryIndex);
+    ui.setSSWEffectIndex(result.sswEffectIndex);
+    ui.setClockDirection(result.sswEffectIndex > 0.005 ? angleToClockString(result.arrowAngle) : '—');
+    updateContribLegend(result.maxContribution);
+    updateSSWLabels(result.effectSumA, result.effectSumB, result.sswEffectIndex, result.arrowAngle);
+
+    // If there's a pending request, process it now
+    if (pendingRequest) {
+        requestSSW(pendingRequest);
+        pendingRequest = null;
+    }
+};
+
+function requestSSW(data) {
+    if (isComputing) {
+        pendingRequest = data;
+        return;
+    }
+    isComputing = true;
+    sswWorker.postMessage(data);
+}
 
 // ── SSW update flag ──────────────────────────────────
 let needsSSWUpdate = true;
@@ -102,29 +144,16 @@ function applyControls() {
 }
 
 function runSSW() {
-    const result = computeSSW(
-        seamPointsRaw,
-        ui.orientX, ui.orientY, ui.orientZ,
-        ui.spinDirection, ui.gyroAngle,
-        ui.alphaFrontDeg, ui.inducedZoneDeg, ui.inducedStartDeg,
-        ui.naturalZoneDeg, ui.alphaBackDeg
-    );
+    // Collect parameters
+    const params = {
+        seamPoints: seamPointsRaw,
+        orientX: ui.orientX, orientY: ui.orientY, orientZ: ui.orientZ,
+        spinDirection: ui.spinDirection, gyroAngle: ui.gyroAngle,
+        alphaFrontDeg: ui.alphaFrontDeg, inducedZoneDeg: ui.inducedZoneDeg, inducedStartDeg: ui.inducedStartDeg,
+        naturalZoneDeg: ui.naturalZoneDeg, alphaBackDeg: ui.alphaBackDeg
+    };
 
-    const mode = ui.displayMode === 'slice' ? 'slice' : 'combined';
-
-    dashboard.update(
-        mode,
-        result.histograms, result.combined,
-        result.contribHistograms, result.combinedContrib,
-        result.numSlices, result.zPlanes,
-        result.asymmetryIndex, result.arrowAngle, result.arrowWidth,
-        result.maxContribution
-    );
-    ui.setAsymmetry(result.asymmetryIndex);
-    ui.setSSWEffectIndex(result.sswEffectIndex);
-    ui.setClockDirection(result.sswEffectIndex > 0.005 ? angleToClockString(result.arrowAngle) : '—');
-    updateContribLegend(result.maxContribution);
-    updateSSWLabels(result.effectSumA, result.effectSumB, result.sswEffectIndex, result.arrowAngle);
+    requestSSW(params);
 }
 
 // ── Render loop (dual viewport) ──────────────────────
