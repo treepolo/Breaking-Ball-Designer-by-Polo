@@ -6,6 +6,42 @@ export class SSWCharts {
         this.currentGyro = 0;
 
         this._initCharts();
+        window.addEventListener('resize', () => this.resize());
+    }
+
+    resize() {
+        if (!this.container || this.charts.length === 0) return;
+
+        // Get current available width from the first wrapper (or container)
+        // Since wrappers are block elements, they should fill the container.
+        // We'll use the first chart's wrapper to determine width.
+        const wrapper = this.charts[0].wrapper;
+        if (!wrapper) return;
+
+        const rect = wrapper.getBoundingClientRect();
+        const width = Math.floor(rect.width);
+        const height = 90; // Fixed height
+        const dpr = window.devicePixelRatio || 1;
+
+        for (const chart of this.charts) {
+            chart.width = width;
+            chart.height = height;
+
+            // Limit canvas size to avoid huge memory usage if something goes wrong, 
+            // but normally it's fine.
+            if (width > 0) {
+                chart.canvas.width = width * dpr;
+                chart.canvas.height = height * dpr;
+                chart.canvas.style.width = `${width}px`;
+                chart.canvas.style.height = `${height}px`;
+
+                // Reset context scale
+                chart.ctx.setTransform(1, 0, 0, 1, 0, 0);
+                chart.ctx.scale(dpr, dpr);
+            }
+        }
+
+        this.draw();
     }
 
     _initCharts() {
@@ -26,6 +62,9 @@ export class SSWCharts {
             this._createChart('SSW半球指數 2', '#3b82f6'),
             this._createChart('SSW效果', '#10b981')
         ];
+
+        // Trigger initial resize to fit container
+        requestAnimationFrame(() => this.resize());
     }
 
     _createChart(title, lineColor) {
@@ -46,13 +85,15 @@ export class SSWCharts {
         const canvas = document.createElement('canvas');
 
         // HiDPI support + Double Size
-        // HiDPI support + Double Size (Now reduced by 1/4 -> 270x90)
+        // HiDPI support + Double Size
         const dpr = window.devicePixelRatio || 1;
-        const width = 270;
+        // Initial dummy size, will be resized immediately
+        const width = 100;
         const height = 90;
+
         canvas.width = width * dpr;
         canvas.height = height * dpr;
-        canvas.style.width = `${width}px`;
+        canvas.style.width = '100%'; // Allow CSS to control width
         canvas.style.height = `${height}px`;
         canvas.style.display = 'block';
 
@@ -63,7 +104,7 @@ export class SSWCharts {
         wrapper.appendChild(canvas);
         this.container.appendChild(wrapper);
 
-        return { ctx, canvas, lineColor, title, width, height, dpr };
+        return { ctx, canvas, wrapper, lineColor, title, width, height, dpr };
     }
 
     updateData(data) {

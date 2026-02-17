@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>SSW潛力觀察器與球路設計器 by小樹Polo</title>
   <meta name="description" content="3D baseball seam-shifted wake analysis tool" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -27,8 +27,27 @@
   <div id="left-sidebar">
     <div id="mini-viewport">
       <span class="mini-label" data-i18n="topView">俯視圖</span>
+      <div id="mini-toggle" class="mini-toggle-btn">▶</div>
     </div>
-    <div id="ssw-charts-container"></div>
+    <div id="ssw-charts-container">
+      <!-- SSW Results (Floating Card) -->
+      <div id="ssw-result-card">
+        <div class="legend-title" data-i18n="sswResults">SSW 結果</div>
+        <div class="result-row">
+          <span class="result-label" data-i18n="asymmetryIndex">不對稱指數</span>
+          <span id="result-asymmetry" class="result-value">0.00</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label" data-i18n="sswEffectIndex">SSW效果指數</span>
+          <span id="result-ssw-effect" class="result-value">0.00</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label" data-i18n="forceDirection">力的方向</span>
+          <span id="result-clock" class="result-value">—</span>
+          <span style="color: red; font-size: 10px; display: block; margin-top: 2px;">(這是錯的還沒修，看箭頭就好)</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Color legend -->
@@ -60,23 +79,7 @@
       </div>
     </div>
 
-    <!-- SSW Results (Floating Card) -->
-    <div id="ssw-result-card">
-      <div class="legend-title" data-i18n="sswResults">SSW 結果</div>
-      <div class="result-row">
-        <span class="result-label" data-i18n="asymmetryIndex">不對稱指數</span>
-        <span id="result-asymmetry" class="result-value">0.00</span>
-      </div>
-      <div class="result-row">
-        <span class="result-label" data-i18n="sswEffectIndex">SSW效果指數</span>
-        <span id="result-ssw-effect" class="result-value">0.00</span>
-      </div>
-      <div class="result-row">
-        <span class="result-label" data-i18n="forceDirection">力的方向</span>
-        <span id="result-clock" class="result-value">—</span>
-        <span style="color: red; font-size: 10px; display: block; margin-top: 2px;">(這是錯的還沒修，看箭頭就好)</span>
-      </div>
-    </div>
+
   </div>
 
 

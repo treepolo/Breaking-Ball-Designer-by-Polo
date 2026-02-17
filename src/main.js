@@ -440,3 +440,13 @@ toggleBtn.addEventListener('click', () => {
 applyControls();
 runSSW();
 requestAnimationFrame(animate);
+
+// ── Mini Viewport Drawer Logic ───────────────────────
+const miniToggle = document.getElementById('mini-toggle');
+const miniViewport = document.getElementById('mini-viewport');
+if (miniToggle && miniViewport) {
+    miniToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        miniViewport.classList.toggle('mini-open');
+    });
+}
