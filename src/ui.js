@@ -13,6 +13,7 @@ export class UIControls {
         this._bindVisibility();
         this._bindLang();
         this._bindViewButtons();
+        this._bindHelp();
         setLang('zh-TW'); // initialize
     }
 
@@ -238,5 +239,25 @@ export class UIControls {
     _bindViewButtons() {
         this._el('btn-pitcher').addEventListener('click', () => this.onChange({ key: 'pitcherView' }));
         this._el('btn-catcher').addEventListener('click', () => this.onChange({ key: 'catcherView' }));
+    }
+
+    _bindHelp() {
+        const btn = this._el('btn-help');
+        const modal = this._el('help-modal');
+        const close = this._el('btn-close-help');
+
+        if (btn && modal && close) {
+            btn.addEventListener('click', () => {
+                modal.classList.remove('hidden');
+            });
+            close.addEventListener('click', () => {
+                modal.classList.add('hidden');
+            });
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.add('hidden');
+                }
+            });
+        }
     }
 }

@@ -59,7 +59,24 @@
         </div>
       </div>
     </div>
-  </div>
+
+    <!-- SSW Results (Floating Card) -->
+    <div id="ssw-result-card">
+      <div class="legend-title" data-i18n="sswResults">SSW 結果</div>
+      <div class="result-row">
+        <span class="result-label" data-i18n="asymmetryIndex">不對稱指數</span>
+        <span id="result-asymmetry" class="result-value">0.00</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label" data-i18n="sswEffectIndex">SSW效果指數</span>
+        <span id="result-ssw-effect" class="result-value">0.00</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label" data-i18n="forceDirection">力的方向</span>
+        <span id="result-clock" class="result-value">—</span>
+        <span style="color: red; font-size: 10px; display: block; margin-top: 2px;">(這是錯的還沒修，看箭頭就好)</span>
+      </div>
+    </div>
   </div>
 
 
@@ -68,7 +85,10 @@
   <div id="control-panel">
     <div class="panel-header">
       <h1 class="panel-title">SSW潛力觀察器與球路設計器<br><span class="brand-accent">by小樹Polo</span></h1>
-      <button id="btn-lang" class="btn-lang" data-i18n="langSwitch">切換成 English</button>
+      <div style="display: flex; align-items: center;">
+        <button id="btn-lang" class="btn-lang" data-i18n="langSwitch">切換成 English</button>
+        <button id="btn-help" class="btn-lang">幫助</button>
+      </div>
     </div>
 
     <!-- View Control -->
@@ -119,9 +139,9 @@
         <input type="range" id="spin-efficiency" min="0" max="100" value="100" step="1" />
       </div>
       <div class="slider-group">
-        <label><span data-i18n="spinRate">轉速</span> <input type="number" id="val-rpm" class="slider-input" value="1800"
+        <label><span data-i18n="spinRate">轉速</span> <input type="number" id="val-rpm" class="slider-input" value="10"
             min="0" max="3000"></label>
-        <input type="range" id="spin-rate" min="0" max="3000" value="1800" step="10" />
+        <input type="range" id="spin-rate" min="0" max="3000" value="10" step="10" />
       </div>
     </section>
 
@@ -192,27 +212,26 @@
     </section>
 
     <!-- SSW Results -->
-    <section class="control-section results-section">
-      <h2 class="section-title" data-i18n="sswResults">SSW 結果</h2>
-      <div class="result-row">
-        <span class="result-label" data-i18n="asymmetryIndex">不對稱指數</span>
-        <span id="result-asymmetry" class="result-value">0.00</span>
-      </div>
-      <div class="result-row">
-        <span class="result-label" data-i18n="sswEffectIndex">SSW效果指數</span>
-        <span id="result-ssw-effect" class="result-value">0.00</span>
-      </div>
-      <div class="result-row">
-        <span class="result-label" data-i18n="forceDirection">力的方向</span>
-        <span id="result-clock" class="result-value">—</span>
-      </div>
-    </section>
+
   </div>
 
   <!-- Mobile panel toggle -->
   <button id="btn-toggle-panel" class="panel-open" aria-label="Toggle panel">▼</button>
 
   <script type="module" src="/src/main.js"></script>
+
+  <!-- Help Modal -->
+  <div id="help-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">幫助</h3>
+        <button id="btn-close-help" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>一段文字</p>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>

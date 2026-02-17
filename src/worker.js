@@ -24,12 +24,13 @@ self.onmessage = function (e) {
                 true // fast mode
             );
 
+            // Disable manual scaling -- compueSSW already normalizes by step count
             // Adjust scale because ssw.js divides by 720 but we only did 36 steps
             // Ratio = 720 / 36 = 20
-            const scale = 720 / 36;
-            res.sswEffectIndex *= scale;
-            res.effectSumA *= scale;
-            res.effectSumB *= scale;
+            // const scale = 720 / 36;
+            // res.sswEffectIndex *= scale;
+            // res.effectSumA *= scale;
+            // res.effectSumB *= scale;
 
             curveData.push({
                 gyro: g,
