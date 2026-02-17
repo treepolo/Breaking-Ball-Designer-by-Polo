@@ -76,7 +76,8 @@ export class UIControls {
             const inputEl = this._el(s.label);
 
             // Handler for update
-            const update = (sourceEl) => {
+            // Handler for update
+            const update = (sourceEl, type = 'live') => {
                 let val = parseFloat(sourceEl.value);
 
                 // Enforce ordering for SSW planes
@@ -94,19 +95,11 @@ export class UIControls {
                 }
 
                 // Sync the other element
-                // Special handling for Clock if needed (currently readonly text, so skipping sync TO it if strict)
-                // BUT we want to allow input? If separate input is readonly, we just update it.
-                // Assuming numeric inputs for all EXCEPT spin-direction which is text.
-                // If s.isClock, inputEl is text. rangeEl is number.
-
                 if (s.isClock) {
                     // Range -> Text (Clock)
-                    // If source is range, update text.
                     if (sourceEl === rangeEl) {
                         inputEl.value = angleToClockString(val * DEG2RAD);
                     }
-                    // If source is input (if we allowed editing), parse clock... 
-                    // For now, assume spin-direction is readonly text as per previous step, so only One-Way sync for display.
                 } else {
                     // Number <-> Number
                     if (sourceEl === rangeEl) {
@@ -117,33 +110,21 @@ export class UIControls {
 
                     // Special Sync: Gyro Angle <-> Spin Efficiency
                     if (s.key === 'gyroAngle') {
-                        // val is Gyro (deg). Efficiency = abs(cos(gyro)) * 100
                         const rad = val * DEG2RAD;
                         const eff = Math.abs(Math.cos(rad)) * 100;
-                        // Update Efficiency UI
                         const effRange = this._el('spin-efficiency');
                         const effInput = this._el('val-spin-efficiency');
-                        if (effRange && effInput) { // check existence
+                        if (effRange && effInput) {
                             effRange.value = eff;
-                            effInput.value = Math.round(eff * 10) / 10; // 1 decimal? or int? slider step is 1.
-                            // But let's follow input precision if needed. Sliders are step 1 usually?
-                            // html step is 1 for efficiency.
                             effInput.value = Math.round(eff);
                         }
                     } else if (s.key === 'spinEfficiency') {
-                        // val is Efficiency (0-100). Gyro = acos(eff/100)
-                        // We need to preserve the sign of the CURRENT gyro angle.
                         const currentGyro = parseFloat(this._el('gyro-angle').value);
                         const sign = currentGyro < 0 ? -1 : 1;
-
-                        // Clamp val 0-100
                         let safeVal = Math.max(0, Math.min(100, val));
-
-                        // acos returns [0, PI]. Convert to deg.
                         let deg = Math.acos(safeVal / 100) * (180 / Math.PI);
                         deg = deg * sign;
 
-                        // Update Gyro UI
                         const gyroRange = this._el('gyro-angle');
                         const gyroInput = this._el('val-gyro');
                         if (gyroRange && gyroInput) {
@@ -151,22 +132,7 @@ export class UIControls {
                             gyroInput.value = Math.round(deg);
                         }
 
-                        // Force the main update to be about gyroAngle because that's what physics uses?
-                        // The `onChange` below sends `spinEfficiency`. Main.js should likely ignore it or we should send gyroAngle too.
-                        // But `onChange` takes one {key, value}.
-                        // So we should hijack and call `this.onChange` with 'gyroAngle' instead?
-                        // OR we rely on the fact that we updated the Gyro slider, but we need to trigger the physics update.
-                        // Let's call this.onChange with gyroAngle as well or instead.
-
-                        this.onChange({ key: 'gyroAngle', value: deg * DEG2RAD }); // Send rads? No, logic above sends `parseFloat(rangeEl.value)` which is deg usually?
-                        // Wait, `this.onChange({ key: s.key, value: parseFloat(rangeEl.value) });`
-                        // UIControls getters convert to radians.
-                        // The callback expects raw value or computed?
-                        // In main.js: `if (key === 'spinRate') return; needsSSWUpdate = true;`
-                        // It just reads from `ui.gyroAngle` getter.
-                        // So as long as we updated the UI element (which getter reads), we are good!
-                        // But we need to trigger the callback to say "something changed, update SSW".
-                        // So falling through to `this.onChange` with `spinEfficiency` is fine, as long as main.js triggers update.
+                        this.onChange({ key: 'gyroAngle', value: deg * DEG2RAD, type });
                     }
                 }
 
@@ -175,13 +141,58 @@ export class UIControls {
                     sourceEl.value = val;
                 }
 
-                this.onChange({ key: s.key, value: parseFloat(rangeEl.value) });
+
+                this.onChange({ key: s.key, value: parseFloat(rangeEl.value), type });
             };
 
-            rangeEl.addEventListener('input', () => update(rangeEl));
+            rangeEl.addEventListener('input', () => update(rangeEl, 'live'));
+            rangeEl.addEventListener('change', () => update(rangeEl, 'committed'));
+
+            // Add keydown listener for immediate keyboard response
+            rangeEl.addEventListener('keydown', (e) => {
+                if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                    // Prevent default to avoid double-step or conflict
+                    // But we need to manually update value
+                    // e.preventDefault(); // Optional: if we want to fully control. 
+                    // Actually, if we prevent default, the slider won't move visually until we set value.
+                    // Let's try to let it move BUT simultaneously force update.
+
+                    // The issue is 'input' fires AFTER the value change.
+                    // If we want immediate response, we can calculate target value.
+
+                    const step = parseFloat(rangeEl.step) || 1;
+                    let val = parseFloat(rangeEl.value);
+                    let handled = false;
+
+                    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+                        val += step;
+                        handled = true;
+                    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+                        val -= step;
+                        handled = true;
+                    }
+
+                    if (handled) {
+                        // Clamp to min/max
+                        const min = parseFloat(rangeEl.min);
+                        const max = parseFloat(rangeEl.max);
+                        if (!isNaN(min)) val = Math.max(min, val);
+                        if (!isNaN(max)) val = Math.min(max, val);
+
+                        // Manually update
+                        rangeEl.value = val;
+                        // Fire updates
+                        update(rangeEl, 'live'); // For Dashboard (immediate)
+                        update(rangeEl, 'committed'); // For Curves (after short delay logic in main)
+
+                        e.preventDefault(); // Stop browser from doing it again
+                    }
+                }
+            });
+
             if (!s.isClock) {
-                inputEl.addEventListener('change', () => update(inputEl));
-                inputEl.addEventListener('input', () => update(inputEl)); // Real-time sync
+                inputEl.addEventListener('change', () => update(inputEl, 'committed'));
+                inputEl.addEventListener('input', () => update(inputEl, 'live'));
             }
         }
     }

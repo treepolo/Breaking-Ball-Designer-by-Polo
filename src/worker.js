@@ -50,3 +50,5 @@ self.onmessage = function (e) {
         self.postMessage(result); // Implicitly result has no 'mode', handled as single
     }
 };
+
+self.postMessage({ type: 'ready' });

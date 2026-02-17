@@ -18,9 +18,9 @@ export function createScene(canvas) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xd0d8e4);
 
-    // ── Main camera (pitcher view default) ─────────────
+    // ── Main camera (catcher view default) ─────────────
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 0, 4);
+    camera.position.set(0, 0, -4);
     camera.lookAt(0, 0, 0);
 
     // ── Top-down camera (orthographic) ─────────────────

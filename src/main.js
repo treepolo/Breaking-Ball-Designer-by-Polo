@@ -40,6 +40,11 @@ sswWorker.onmessage = (e) => {
     isComputing = false;
     const result = e.data;
 
+    if (result.type === 'ready') {
+        runSSW();
+        return;
+    }
+
     if (result.mode === 'curve') {
         // Curve data received
         charts.updateData(result.data);
@@ -87,43 +92,6 @@ function requestSSW(data) {
         pendingRequest = data;
         return;
     }
-
-    // Check if we need to request a curve update
-    // We update curve if parameters OTHER THAN gyroAngle change.
-    const curveParamsKey = JSON.stringify({
-        ox: data.orientX, oy: data.orientY, oz: data.orientZ,
-        sd: data.spinDirection,
-        af: data.alphaFrontDeg, iz: data.inducedZoneDeg, is: data.inducedStartDeg, nz: data.naturalZoneDeg, ab: data.alphaBackDeg
-    });
-
-    if (curveParamsKey !== lastCurveParams) {
-        // Request curve calc FIRST (or parallel? worker is single thread).
-        // If specific params changed, we queue a curve request.
-        // We can send a separate message for curve.
-        // But `isComputing` flag blocks.
-        // We should probably interleave or just send it?
-        // Let's send curve request, then single request?
-        // Or just send curve request and let the single request follow?
-        // Actually, if we send curve request, the worker will be busy.
-        // Real-time update of single point is higher priority for visual feedback?
-        // User wants charts.
-        // If dragging Orient, curve changes constantly.
-        // If we request curve every frame, it might lag.
-        // Debounce curve calculation?
-        // Or just do it. Worker is separate thread. 
-        // We can create a SECOND worker for background tasks like curve?
-        // That would be best for responsiveness.
-        // BUT for now, let's use one worker and maybe throttle curve updates?
-        // Simplest: Request curve if changed.
-
-        lastCurveParams = curveParamsKey;
-
-        // We can't send two messages if we use `isComputing` lock.
-        // We should modify `requestSSW` to handle types or queue.
-        // But for simplicity, let's just make a new worker instance for curves?
-        // The file is tiny.
-    }
-
     isComputing = true;
     sswWorker.postMessage(data);
 }
@@ -137,6 +105,10 @@ curveWorker.onmessage = (e) => {
     if (e.data.mode === 'curve') {
         charts.updateData(e.data.data);
         charts.updateCursor(ui.gyroAngle / DEG2RAD);
+    } else if (e.data.type === 'ready') {
+        // Run initial curve calculation when worker is ready
+        updateCurve = true; // force update
+        runSSW();
     }
 };
 
@@ -147,10 +119,12 @@ function requestCurve(data) {
 }
 
 // ── SSW update flag ──────────────────────────────────
-let needsSSWUpdate = true;
+let needsMainUpdate = true;
+let updateSSW = true;
+let updateCurve = true;
 
 // ── UI ───────────────────────────────────────────────
-const ui = new UIControls(({ key }) => {
+const ui = new UIControls(({ key, value, type }) => {
     if (key === 'playPause') { anim.setPlaying(ui.isPlaying); return; }
     if (key === 'pitcherView') { setPitcherView(camera, controls); return; }
     if (key === 'catcherView') { setCatcherView(camera, controls); return; }
@@ -159,7 +133,12 @@ const ui = new UIControls(({ key }) => {
         dashboard.setVisibility(ui.visibleSeam, ui.visibleContrib);
         return;
     }
-    needsSSWUpdate = true;
+
+    updateSSW = true;
+    if (type === 'committed' || type === undefined) {
+        updateCurve = true;
+    }
+    needsMainUpdate = true;
 });
 
 // ── Animation ────────────────────────────────────────
@@ -229,33 +208,41 @@ function applyControls() {
 }
 
 function runSSW() {
-    // Collect parameters
-    const params = {
-        seamPoints: seamPointsRaw,
-        orientX: ui.orientX, orientY: ui.orientY, orientZ: ui.orientZ,
-        spinDirection: ui.spinDirection, gyroAngle: ui.gyroAngle,
-        alphaFrontDeg: ui.alphaFrontDeg, inducedZoneDeg: ui.inducedZoneDeg, inducedStartDeg: ui.inducedStartDeg,
-        naturalZoneDeg: ui.naturalZoneDeg, alphaBackDeg: ui.alphaBackDeg
-    };
+    try {
+        // Collect parameters
+        const params = {
+            seamPoints: seamPointsRaw,
+            orientX: ui.orientX, orientY: ui.orientY, orientZ: ui.orientZ,
+            spinDirection: ui.spinDirection, gyroAngle: ui.gyroAngle,
+            alphaFrontDeg: ui.alphaFrontDeg, inducedZoneDeg: ui.inducedZoneDeg, inducedStartDeg: ui.inducedStartDeg,
+            naturalZoneDeg: ui.naturalZoneDeg, alphaBackDeg: ui.alphaBackDeg
+        };
 
-    requestSSW(params);
+        if (updateSSW) {
+            requestSSW(params);
+            updateSSW = false;
+        }
 
-    // Check if curve needs update
-    const curveParamsKey = JSON.stringify({
-        ox: params.orientX, oy: params.orientY, oz: params.orientZ,
-        sd: params.spinDirection,
-        af: params.alphaFrontDeg, iz: params.inducedZoneDeg, is: params.inducedStartDeg, nz: params.naturalZoneDeg, ab: params.alphaBackDeg
-    });
+        // Check if curve needs update
+        const curveParamsKey = JSON.stringify({
+            ox: params.orientX, oy: params.orientY, oz: params.orientZ,
+            sd: params.spinDirection,
+            af: params.alphaFrontDeg, iz: params.inducedZoneDeg, is: params.inducedStartDeg, nz: params.naturalZoneDeg, ab: params.alphaBackDeg
+        });
 
-    if (curveParamsKey !== lastCurveParams) {
-        lastCurveParams = curveParamsKey;
-        // Debounce? Or just fire. For 2-degree step (90 pts), it might be fast enough.
-        // But if too many accumulate in worker queue...
-        // curveWorker handles one message at a time sequentially.
-        requestCurve(params);
-    } else {
-        // Just update cursor
+        if (curveParamsKey !== lastCurveParams) {
+            if (updateCurve) {
+                lastCurveParams = curveParamsKey;
+                requestCurve(params);
+                updateCurve = false;
+            }
+        } else {
+            updateCurve = false;
+        }
+
         charts.updateCursor(ui.gyroAngle / DEG2RAD);
+    } catch (err) {
+        console.error("runSSW Error:", err);
     }
 }
 
@@ -280,8 +267,8 @@ function animate(timestamp) {
     controls.update();
     applyControls();
 
-    if (needsSSWUpdate) {
-        needsSSWUpdate = false;
+    if (needsMainUpdate) {
+        needsMainUpdate = false;
         setTimeout(runSSW, 0);
     }
 
